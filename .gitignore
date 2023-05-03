@@ -1,0 +1,12 @@
+# meta
+.vscode/
+__pycache__/
+
+# repo
+repo/
+
+# thesis
+ref/*.pdf
+
+# generated
+stat/
