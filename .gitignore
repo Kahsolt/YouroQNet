@@ -2,6 +2,11 @@
 .vscode/
 __pycache__/
 
+# data
+data/*
+!train.csv
+!test.csv
+
 # repo
 repo/
 
