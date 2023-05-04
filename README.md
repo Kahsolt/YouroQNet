@@ -17,7 +17,7 @@ Class labels:
 | 2 | hate  |
 | 3 | sad   |
 
-⚠ When dataset is extremely small, any model will be like a word counter.
+⚠ When dataset is extremely small, any model will behave just like a word counter.
 
 
 ### Quickstart
