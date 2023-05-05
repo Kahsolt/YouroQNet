@@ -6,11 +6,12 @@ from pathlib import Path
 from functools import reduce
 from copy import deepcopy
 from collections import Counter, defaultdict, OrderedDict
-from typing import List, Dict, Callable, Any
+from typing import List, Dict, Callable
 
 import jieba
 import pandas as pd
 import matplotlib.pyplot as plt
+from wordcloud import WordCloud
 
 DATA_PATH = Path('data')
 STAT_PATH = Path('stat') ; STAT_PATH.mkdir(exist_ok=True)
@@ -31,17 +32,23 @@ def load_vocab(fp:str) -> Dict[str, int]:
 
 
 def dump_vocab(voc:Dict[str, int], fp:str):
+  wc = WordCloud(font_path='simhei.ttf', height=1600, width=2048, background_color='white')
+  wc.fit_words(voc)
+  wc.to_file(Path(fp).with_suffix('.png'))
+
   with open(fp, 'w', encoding='utf-8') as fh:
     for v, c in voc.items():
       fh.write(f'{v}\t{c}\n')
 
 
-def write_stats(items:List[Any], name:str, subfolder:str=''):
+def write_stats(items:List[str], name:str, subfolder:str=''):
   out_dp = STAT_PATH / subfolder
   out_dp.mkdir(exist_ok=True)
 
   pairs = sorted([(c, v) for v, c in Counter(items).items()], reverse=True)
   dump_vocab(OrderedDict([(v, c) for c, v in pairs]), out_dp / f'vocab_{name}.txt')
+
+
 
   with open(out_dp / f'stats_{name}.txt', 'w', encoding='utf-8') as fh:
     fh.write(f'words: {len(items)}\n')

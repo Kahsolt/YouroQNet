@@ -1,11 +1,12 @@
 # core libs; fix versions as the contest requires
 pyqpanda==3.7.16
-pqvqnet==2.0.6
+pyvqnet==2.0.6
 
 # auxiliary libs
 pandas
 numpy
 matplotlib
 
-# forbidden libs (only for scaffold use)
+# analytic libs (only for scaffold use)
 jieba
+wordcloud
