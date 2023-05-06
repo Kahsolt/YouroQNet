@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 
 DATA_PATH = Path('data')
-STAT_PATH = Path('stat') ; STAT_PATH.mkdir(exist_ok=True)
+LOG_PATH  = Path('log') ; LOG_PATH.mkdir(exist_ok=True)
 
 N_CLASS = 4
 COULMNS = ['label', 'text']
@@ -42,13 +42,11 @@ def dump_vocab(voc:Dict[str, int], fp:str):
 
 
 def write_stats(items:List[str], name:str, subfolder:str=''):
-  out_dp = STAT_PATH / subfolder
-  out_dp.mkdir(exist_ok=True)
+  out_dp = LOG_PATH / subfolder / 'stats'
+  out_dp.mkdir(exist_ok=True, parents=True)
 
   pairs = sorted([(c, v) for v, c in Counter(items).items()], reverse=True)
   dump_vocab(OrderedDict([(v, c) for c, v in pairs]), out_dp / f'vocab_{name}.txt')
-
-
 
   with open(out_dp / f'stats_{name}.txt', 'w', encoding='utf-8') as fh:
     fh.write(f'words: {len(items)}\n')
@@ -60,6 +58,20 @@ def write_stats(items:List[str], name:str, subfolder:str=''):
   plt.savefig(out_dp / f'freq_{name}.png')
 
 
+def write_lens(lens:List[int], name:str, subfolder:str=''):
+  out_dp = LOG_PATH / subfolder / 'stats'
+  out_dp.mkdir(exist_ok=True, parents=True)
+
+  pairs = sorted([(v, c) for v, c in Counter(lens).items()], reverse=True)
+  x = [v for v, c in pairs]
+  y = [c for v, c in pairs]
+
+  plt.clf()
+  plt.plot(x, y)
+  plt.suptitle(f'len_{name}')
+  plt.savefig(out_dp / f'len_{name}.png')
+
+
 def make_stats(kind:str, line_parser:Callable):
   words_all = []
   for split in SPLITS:
@@ -67,16 +79,21 @@ def make_stats(kind:str, line_parser:Callable):
     label, text = df['label'].to_numpy().astype(int), df['text'].to_numpy()
 
     words_cls = defaultdict(list)
+    lens_cls  = defaultdict(list)
     for cls, line in zip(label, text):
-      tokens = line_parser(line) ; assert ''not in tokens
+      tokens = line_parser(line) ; assert '' not in tokens
       words_cls[cls].extend(tokens)
+      lens_cls [cls].append(len(tokens))
 
     # class-wise
     for cls in words_cls.keys():
       write_stats(words_cls[cls], f'{split}_{cls}', subfolder=kind)
+      write_lens (lens_cls [cls], f'{split}_{cls}', subfolder=kind)
     # split-wise
     words_split = reduce(lambda x, y: x.extend(y) or x, words_cls.values(), [])
     write_stats(words_split, split, subfolder=kind)
+    lens_split = reduce(lambda x, y: x.extend(y) or x, lens_cls.values(), [])
+    write_lens(lens_split, split, subfolder=kind)
 
     words_all.extend(words_split)
 
@@ -85,7 +102,7 @@ def make_stats(kind:str, line_parser:Callable):
 
 
 def diff_vocab(kind:str):
-  out_dp = STAT_PATH / kind
+  out_dp = LOG_PATH / kind / 'stats'
 
   vocabs = { split: load_vocab(out_dp / f'vocab_{split}.txt') for split in SPLITS }
 
@@ -103,7 +120,7 @@ def diff_vocab(kind:str):
 
 
 def uniq_vocab(kind:str):
-  out_dp = STAT_PATH / kind
+  out_dp = LOG_PATH / kind / 'stats'
 
   for split in SPLITS:
     vocabs = { cls: load_vocab(out_dp / f'vocab_{split}_{cls}.txt') for cls in range(N_CLASS) }

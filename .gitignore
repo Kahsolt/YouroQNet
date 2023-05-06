@@ -7,11 +7,13 @@ data/*
 !train.csv
 !test.csv
 
+# generated
+log/
+
 # repo
-repo/
+repo/*
+!repo/*.cmd
 
 # thesis
-ref/*.pdf
-
-# generated
-stat/
+ref/*
+!ref/Question-ML.png

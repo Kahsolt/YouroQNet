@@ -4,9 +4,11 @@ pyvqnet==2.0.6
 
 # auxiliary libs
 pandas
-numpy
+numpy==1.23.5
 matplotlib
 
 # analytic libs (only for scaffold use)
 jieba
 wordcloud
+scikit-learn
+scikit-learn-intelex
