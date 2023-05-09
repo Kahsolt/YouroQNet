@@ -17,15 +17,16 @@ And, code repo for the qualifying stage is here: [第二届“司南杯”初赛
   - `conda activate q`
   - `pip install -r requirements.txt`
 
-⚪ for evaluation only
+⚪ for contest problem evaluation only
 
-  - `run_quantum.cmd`
+  - `python run.py`
 
 ⚪ for full development
 
-  - `pushd repo & init_repos.cmd & popd` for extra dependencies
+  - `pip install -r requirements_dev.txt` for extra dependencies
+  - `pushd repo & init_repos.cmd & popd` for extra git repos
     - fasttext==0.9.2 requires numpy<1.24 (things might changed)
-  - `python mk_stats.py` for dataset stats & plots
+  - `run_preprocess.cmd` for dataset stats & plots & vocabs etc...
   - `run_baseline.cmd` for classic models
   - `run_quantum.cmd` for quantum models
 
@@ -62,11 +63,19 @@ A subset from [simplifyweibo_4_moods](https://github.com/SophonPlus/ChineseNlpCo
 
 ### references
 
-- NLP clf survey: [https://zhuanlan.zhihu.com/p/349086747](https://zhuanlan.zhihu.com/p/349086747)
-- fastText: [https://github.com/facebookresearch/fastText](https://github.com/facebookresearch/fastText)
-- QSANN: [https://arxiv.org/abs/2205.05625](https://arxiv.org/abs/2205.05625)
+- text-clf survey:
+  - [https://zhuanlan.zhihu.com/p/349086747](https://zhuanlan.zhihu.com/p/349086747)
+  - [https://zhuanlan.zhihu.com/p/161068416](https://zhuanlan.zhihu.com/p/161068416)
+  - [https://www.cnblogs.com/sandwichnlp/p/11698996.html](https://www.cnblogs.com/sandwichnlp/p/11698996.html)
+  - [https://mp.weixin.qq.com/s?__biz=MzI1MjQ2OTQ3Ng==&mid=2247485438&idx=1&sn=00dfcb8c344c3a622a88d9360c866c2e](https://mp.weixin.qq.com/s?__biz=MzI1MjQ2OTQ3Ng==&mid=2247485438&idx=1&sn=00dfcb8c344c3a622a88d9360c866c2e)
+- fastText: 
+  - Enriching Word Vectors with Subword Information: [https://arxiv.org/abs/1607.04606](https://arxiv.org/abs/1607.04606)
+  - Bag of Tricks for Efficient Text Classification: [https://arxiv.org/abs/1607.01759](https://arxiv.org/abs/1607.01759)
 - QNLP-DisCoCat: [https://arxiv.org/pdf/2102.12846.pdf](https://arxiv.org/pdf/2102.12846.pdf)
-  - repo: [https://github.com/CQCL/qnlp_lorenz_etal_2021_resources](https://github.com/CQCL/qnlp_lorenz_etal_2021_resources)
+- QSANN: [https://arxiv.org/abs/2205.05625](https://arxiv.org/abs/2205.05625)
+
+=> find thesis of related work in [ref/init_thesis.cmd](ref/init_thesis.cmd)  
+=> find implementations of related work in [repo/init_repos.cmd](repo/init_repos.cmd)  
 
 ----
 

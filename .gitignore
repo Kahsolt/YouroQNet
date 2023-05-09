@@ -16,4 +16,5 @@ repo/*
 
 # thesis
 ref/*
+!ref/*.cmd
 !ref/Question-ML.png

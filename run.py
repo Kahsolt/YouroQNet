@@ -2,10 +2,7 @@
 # Author: Armit
 # Create Time: 2023/05/03 
 
-import numpy as np
-import pyqpanda as pq
-import pyvqnet
-import pandas as pd
+from run_quantum import *
 
 
 def train():

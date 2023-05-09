@@ -2,17 +2,15 @@
 # Author: Armit
 # Create Time: 2023/05/05 
 
-import warnings ; warnings.simplefilter("ignore")
 import pickle as pkl
-import shutil
 from pathlib import Path
 from argparse import ArgumentParser
 from traceback import print_exc
 from typing import Tuple, List
+import warnings ; warnings.simplefilter("ignore")
 
 import jieba
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 
 try:
@@ -33,27 +31,24 @@ try:
   from sklearn.svm import SVC, NuSVC, LinearSVC
   from sklearn.neural_network import MLPClassifier, BernoulliRBM
   from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
-
-  from mk_stats import DATA_PATH, LOG_PATH, SPLITS
-  from utils import get_logger, clean_text
 except:
   print_exc()
   print('sklearn not installed, some of the features may not work')
 
 try:
   import fasttext.util
-  from fasttext.FastText import _FastText
+  from fasttext.FastText import _FastText as FastText
 except:
   print_exc()
   print('fasttext not installed, some of the features may not work')
 
+from utils import *
 
-RANDSEED = 114514
-
-# TODO: hard-coded
-STOP_WORDS_CHAR = ['，', ' ', '的', '。', '.', '！', '我', '了', '是', '不', '一']
-STOP_WORDS_WORD = ['，', ' ', '的', '。', '！', '了', '我']
 FASTTEXT_CKPT_PATH = DATA_PATH / 'cc.zh.300.bin'
+
+Dataset = Tuple[np.ndarray, np.ndarray]
+Datasets = Tuple[Dataset, ...]
+Scores = Tuple[List[float], List[float], List[float], np.ndarray]
 
 MODELS = {
   'knn-5':   lambda: KNeighborsClassifier(n_neighbors=5),
@@ -94,16 +89,7 @@ MODELS = {
 }
 
 
-def load_dataset(split:str) -> Tuple[np.ndarray, List[str]]:
-  df = pd.read_csv(DATA_PATH / f'{split}.csv')
-  if split == 'valid': df = pd.concat([df_cls.sample(n=1000, random_state=RANDSEED) for _, df_cls in df.groupby(df.columns[0])])
-  Y = df[df.columns[ 0]].to_numpy().astype(np.int32)  # [N=1600]
-  T = df[df.columns[-1]].to_numpy().tolist()
-  #T = clean_text(T)
-  return T, Y
-
-
-def run_tfidf(analyzer:str) -> Tuple[Tuple[np.ndarray, np.ndarray], ...]:
+def run_tfidf(analyzer:str) -> Datasets:
   ''' This should be more like syntaxical feature '''
   assert analyzer in ['char', 'word']
 
@@ -128,26 +114,27 @@ def run_tfidf(analyzer:str) -> Tuple[Tuple[np.ndarray, np.ndarray], ...]:
   return (X_train, Y_train), (X_test,  Y_test), (X_valid, Y_valid)
 
 
-def run_fasttext(analyzer:str) -> Tuple[Tuple[np.ndarray, np.ndarray], ...]:
+def run_fasttext(analyzer:str) -> Datasets:
   ''' This should be more like semantical feature '''
   assert analyzer in ['char', 'word', 'sent']
 
   if not FASTTEXT_CKPT_PATH.exists():
+    import shutil
     fasttext.util.download_model('zh', if_exists='ignore')
     BASE_PATH = Path(__file__).absolute()
     shutil.move(BASE_PATH / 'cc.zh.300.bin',    DATA_PATH)
     shutil.move(BASE_PATH / 'cc.zh.300.bin.gz', DATA_PATH)
-  embed: _FastText = fasttext.load_model(str(FASTTEXT_CKPT_PATH))
+  embed: FastText = fasttext.load_model(str(FASTTEXT_CKPT_PATH))
 
-  def process_data(split:str):
+  def process_data(split:str) -> Dataset:
     T, Y = load_dataset(split)
     if analyzer == 'char':
-      X = np.stack([np.stack([embed.get_word_vector(w) for w in list(line) if w in embed and w not in STOP_WORDS_CHAR], axis=0).mean(axis=0) for line in T], axis=0)
+      X = [np.stack([embed.get_word_vector(w) for w in list(t) if w in embed and w not in STOP_WORDS_CHAR], axis=0).mean(axis=0) for t in T]
     elif analyzer == 'word':
-      X = np.stack([np.stack([embed.get_word_vector(w) for w in jieba.cut_for_search(line) if w in embed and w not in STOP_WORDS_WORD], axis=0).mean(axis=0) for line in T], axis=0)
+      X = [np.stack([embed.get_word_vector(w) for w in jieba.cut_for_search(t) if w in embed and w not in STOP_WORDS_WORD], axis=0).mean(axis=0) for t in T]
     elif analyzer == 'sent':
-      X = np.stack([embed.get_sentence_vector(t) for t in T], axis=0)
-    return X, Y
+      X = [embed.get_sentence_vector(t) for t in T]
+    return np.stack(X, axis=0), Y
 
   X_train, Y_train = process_data('train')
   X_test,  Y_test  = process_data('test')
@@ -155,7 +142,7 @@ def run_fasttext(analyzer:str) -> Tuple[Tuple[np.ndarray, np.ndarray], ...]:
   return (X_train, Y_train), (X_test,  Y_test), (X_valid, Y_valid)
 
 
-def run_visualize(datasets, name, out_dp):
+def run_visualize(datasets:Datasets, name:str, out_dp:Path):
   (X_train, Y_train), (X_test,  Y_test), (X_valid, Y_valid) = datasets
 
   def save_plot(fp:Path, z_train, z_test, z_valid, s=1):
@@ -214,7 +201,7 @@ def run_visualize(datasets, name, out_dp):
     save_plot(out_dp / f'tsne_{name}.png', z_all[:cp, :], z_all[cp:cp2, :], z_all[cp2:, :])
 
 
-def run_model(name, model, datasets, logger) -> Tuple[List[float], List[float], List[float], np.ndarray]:
+def run_model(name, model, datasets:Datasets, logger:Logger) -> Scores:
   (X_train, Y_train), (X_test,  Y_test), (X_valid, Y_valid) = datasets
 
   model.fit(X_train, Y_train)
@@ -253,7 +240,7 @@ def make_cmp_eval():
     for analyzer in ['char', 'word', 'sent']:
       out_dp = LOG_PATH / analyzer / feature
       if not out_dp.exists(): continue
-            
+
       with open(out_dp / 'result.pkl', 'rb') as fh:
         result = pkl.load(fh)
 
@@ -292,8 +279,8 @@ def make_cmp_eval():
 
 if __name__ == '__main__':
   parser = ArgumentParser()
-  parser.add_argument('--feature',  choices=['tfidf', 'fasttext'],    help='input feature')
   parser.add_argument('--analyzer', choices=['char', 'word', 'sent'], help='tokenize level')
+  parser.add_argument('--feature',  choices=['tfidf', 'fasttext'],    help='input feature')
   parser.add_argument('--eval', action='store_true', help='compare result scores')
   args = parser.parse_args()
 
@@ -304,7 +291,7 @@ if __name__ == '__main__':
   out_dp: Path = LOG_PATH / args.analyzer / args.feature
   out_dp.mkdir(exist_ok=True, parents=True)
 
-  datasets = globals()[f'run_{args.feature}'](args.analyzer)
+  datasets: Datasets = globals()[f'run_{args.feature}'](args.analyzer)
   run_visualize(datasets, f'{args.feature}-{args.analyzer}', out_dp)
 
   logger = get_logger(out_dp / 'run.log', mode='w')
@@ -323,5 +310,3 @@ if __name__ == '__main__':
 
   with open(out_dp / 'result.pkl', 'wb') as fh:
     pkl.dump(result, fh)
-
-  make_cmp_eval()

@@ -1,0 +1,7 @@
+# auxiliar libs (only for developing)
+matplotlib
+jieba
+wordcloud
+scikit-learn
+scikit-learn-intelex
+fasttext

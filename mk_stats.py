@@ -13,12 +13,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 
-DATA_PATH = Path('data')
-LOG_PATH  = Path('log') ; LOG_PATH.mkdir(exist_ok=True)
-
-N_CLASS = 4
-COULMNS = ['label', 'text']
-SPLITS  = ['train', 'test', 'valid']
+from utils import *
 
 df_to_set = lambda x: { tuple(it) for it in x.to_numpy().tolist() }
 set_to_df = lambda x: pd.DataFrame(x, columns=COULMNS, index=None)
@@ -31,7 +26,15 @@ def load_vocab(fp:str) -> Dict[str, int]:
   return {v: int(c) for v, c in val_cnt}
 
 
-def dump_vocab(voc:Dict[str, int], fp:str):
+def sort_vocab(voc:Dict[str, int]) -> Dict[str, int]:
+  pairs = sorted([(c, v) for v, c in voc.items()], reverse=True)
+  voc = OrderedDict([(v, c) for c, v in pairs])
+  return voc
+
+
+def dump_vocab(voc:Dict[str, int], fp:str, sort:bool=False):
+  if sort: voc = sort_vocab(voc)
+
   wc = WordCloud(font_path='simhei.ttf', height=1600, width=2048, background_color='white')
   wc.fit_words(voc)
   wc.to_file(Path(fp).with_suffix('.png'))
@@ -41,19 +44,19 @@ def dump_vocab(voc:Dict[str, int], fp:str):
       fh.write(f'{v}\t{c}\n')
 
 
-def write_stats(items:List[str], name:str, subfolder:str=''):
+def write_stats(tokens:List[str], name:str, subfolder:str=''):
   out_dp = LOG_PATH / subfolder / 'stats'
   out_dp.mkdir(exist_ok=True, parents=True)
 
-  pairs = sorted([(c, v) for v, c in Counter(items).items()], reverse=True)
-  dump_vocab(OrderedDict([(v, c) for c, v in pairs]), out_dp / f'vocab_{name}.txt')
+  voc = sort_vocab(Counter(tokens).items())
+  dump_vocab(voc, out_dp / f'vocab_{name}.txt')
 
   with open(out_dp / f'stats_{name}.txt', 'w', encoding='utf-8') as fh:
-    fh.write(f'words: {len(items)}\n')
-    fh.write(f'vocab: {len(pairs)}\n')
+    fh.write(f'words: {len(tokens)}\n')
+    fh.write(f'vocab: {len(voc)}\n')
 
   plt.clf()
-  plt.plot([c for c, v in pairs])
+  plt.plot(voc.values())
   plt.suptitle(f'freq_{name}')
   plt.savefig(out_dp / f'freq_{name}.png')
 
