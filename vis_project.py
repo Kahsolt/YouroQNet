@@ -46,9 +46,9 @@ def plot_project(model:Union[PCA, TSNE], datasets:Datasets, name:str):
 
 if __name__ == '__main__':
   parser = ArgumentParser()
-  parser.add_argument('-M', '--method',   default='pca',   choices=METHODS.keys(),           help='project method')
-  parser.add_argument('-L', '--analyzer', default='char',  choices=['char', 'word', 'sent'], help='tokenize level')
-  parser.add_argument('-F', '--feature',  default='tfidf', choices=['tfidf', 'fasttext'],    help='input feature')
+  parser.add_argument('-M', '--method',   default='pca',   choices=METHODS.keys(), help='project method')
+  parser.add_argument('-L', '--analyzer', default='char',  choices=ANALYZERS,      help='tokenize level')
+  parser.add_argument('-F', '--feature',  default='tfidf', choices=FEATURES,       help='input feature')
   args = parser.parse_args()
 
   model = METHODS[args.method]()

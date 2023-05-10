@@ -2,17 +2,57 @@
 # Author: Armit
 # Create Time: 2023/05/09 
 
-# heuristically build a n-gram vocab dictionary from `train.txt`
+# heuristically build a k-gram vocab dictionary from `train.txt`
 
 import math
-from functools import reduce
+from pathlib import Path
+from functools import reduce, partial
 from argparse import ArgumentParser
-from collections import defaultdict, Counter
-from typing import Callable, Dict, Union, Tuple, List
+from collections import defaultdict, Counter, OrderedDict
+from typing import Callable, Dict, Union, Tuple, List, Optional
+
+from wordcloud import WordCloud
 
 from utils import LOG_PATH, load_dataset, timer
-from mk_stats import dump_vocab, load_vocab
 
+''' vocab '''
+
+Vocab  = Dict[str, int]
+VocabP = Dict[str, float]
+
+def load_vocab(fp:str) -> Vocab:
+  with open(fp, encoding='utf-8') as fh:
+    lines = fh.read().rstrip().split('\n')
+  val_cnt = [line.split('\t') for line in lines]
+  return {v: int(c) for v, c in val_cnt}
+
+def dump_vocab(voc:Vocab, fp:str, sort:bool=False):
+  if sort: voc = sort_vocab(voc)
+
+  wc = WordCloud(font_path='simhei.ttf', height=1600, width=2048, background_color='white')
+  wc.fit_words(voc)
+  wc.to_file(Path(fp).with_suffix('.png'))
+
+  with open(fp, 'w', encoding='utf-8') as fh:
+    for v, c in voc.items():
+      fh.write(f'{v}\t{c}\n')
+
+def sort_vocab(voc:Vocab) -> Vocab:
+  pairs = sorted([(c, v) for v, c in voc.items()], reverse=True)
+  return OrderedDict([(v, c) for c, v in pairs])
+
+def reverse_vocab(voc:Vocab) -> Vocab:
+  return {v[::-1]: c for v, c in voc.items()}
+
+def truncate_vocab(voc:Vocab, min_freq:int=3) -> Vocab:
+  return {v: c for v, c in voc.items() if c >= min_freq}
+  
+def vocab_to_vocabp(voc:Vocab) -> VocabP:
+  cnt = sum(voc.values())
+  for v in voc: voc[v] /= cnt
+  return voc
+
+''' ngram '''
 
 def make_ngram(n:int=2, line_parser:Callable=list):
   T, _ = load_dataset('train', normalize=True)
@@ -27,18 +67,18 @@ def make_ngram(n:int=2, line_parser:Callable=list):
   out_dp.mkdir(exist_ok=True, parents=True)
   dump_vocab(voc, out_dp / 'vocab.txt', sort=True)
 
+''' kgram '''
 
 Term = Union[float, None]
 Node = Tuple['Trie', Term]
 Trie = Dict[str, Node]
+TokenizedS = List[str]
+TokenizedP = List[Tuple[float, List[str]]]
+Tokenized = Union[TokenizedS, TokenizedP]
 
-def _vocab_to_prob(voc:Dict[str, int]) -> Dict[str, float]:
-  cnt = sum(voc.values())
-  for v in voc: voc[v] /= cnt
-  return voc
-
-def _mk_trie(vocab:Dict[str, float]) -> Trie:
+def _mk_trie(vocab:VocabP) -> Trie:
   ''' build a trie tree '''
+
   def _new_node() -> Node:
     return [{}, None]
   def _add_word(trie:Trie, word:str, p:float):
@@ -72,7 +112,12 @@ def _q_trie(trie:Trie, sent:str) -> List[Tuple[str, float]]:
   
   return words
 
-def _tokenize(trie:Trie, sent:str, n_beam:int=3) -> List[str]:
+def _tokenize(trie:Trie, sent:str, n_beam:int=3, top_k:int=None) -> Tokenized:
+  '''
+    uni-directional tokenizer with beam search
+    NOTE: when top_k is None it returns [words], otherwise [(prob, [words])]
+  '''
+
   candidates: List[float, str, List[str]] = [
     # Σlog(p), sent_remnant, toks
     [0.0, sent, []],
@@ -102,30 +147,69 @@ def _tokenize(trie:Trie, sent:str, n_beam:int=3) -> List[str]:
 
     candidates = sorted(candidates_new, reverse=True)[:n_beam]
 
-  return candidates[0][-1]    # only keep the solution with highest prob
+  if top_k is None:
+    return candidates[0][-1]    # NOTE: only keep the solution with highest prob
+  else:
+    return [(cand[0], cand[-1]) for cand in candidates[:top_k]]   
 
-def make_tokenizer(fp:str) -> Callable[[str], List[str]]:
-  trie = _mk_trie(_vocab_to_prob(load_vocab(fp)))
-  return lambda t: _tokenize(trie, t, n_beam=3)
+def _tokenize_bidirectional(trie:Trie, trie_rev:Trie, sent:str, n_beam:int=3, top_k:int=None) -> Tokenized:
+  ''' wraps _tokenize() '''
+
+  res     = _tokenize(trie,     sent,       n_beam, top_k or 1)
+  res_rev = _tokenize(trie_rev, sent[::-1], n_beam, top_k or 1)
+  res_rev = [(prob, [w[::-1] for w in words][::-1]) for prob, words in res_rev]
+  res = sorted(res + res_rev, reverse=True)
+  if 'dedup':
+    res = [(round(p, ndigits=5), tuple(ws)) for p, ws in res]
+    res = sorted(set(res), reverse=True)
+    res = [(p, list(ws)) for p, ws in res]
+
+  if top_k is None: return res[0][-1]
+  if top_k  > 0:    return res[:top_k]
+  if top_k <= 0:    return res
+
+def make_tokenizer(fp_or_vocab:Union[str, Vocab, VocabP]=None, bidrectional:bool=True) -> Callable[[str, Optional[int], Optional[int]], Tokenized]:
+  ''' use a vocab to build a tokenizer '''
+
+  if isinstance(fp_or_vocab, Dict):
+    vocab = fp_or_vocab
+  else:
+    if isinstance(fp_or_vocab, (str, Path)):
+      fp = fp_or_vocab
+    elif fp_or_vocab is None:
+      fp = LOG_PATH / 'kgram' / 'vocab.txt'
+    else: raise ValueError
+    vocab = load_vocab(fp)
+  
+  assert len(vocab), 'vocab should not be empty'
+  probs = list(vocab.values())
+  if not isinstance(probs[0], float):
+    vocab = vocab_to_vocabp(vocab)
+
+  if bidrectional:
+    trie     = _mk_trie(              vocab)
+    trie_rev = _mk_trie(reverse_vocab(vocab))
+    return partial(_tokenize_bidirectional, trie, trie_rev)
+  else:
+    trie = _mk_trie(vocab)
+    return partial(_tokenize, trie)
 
 @timer
-def make_kgram(vocabs:List[Dict[str, int]], min_freq:int=3, n_beam:int=3):
-  # reverse list & turn freq to prob
+def make_kgram(vocabs:List[Vocab], min_freq:int=3, n_beam:int=4):
+  # reverse list & turn freq to prob & merge all vocabs
   for i, voc in enumerate(vocabs):
-    vocabs[i] = _vocab_to_prob({v: c for v, c in voc.items() if c >= min_freq})
-
-  # merge all vocabs & make trie tree
+    vocabs[i] = vocab_to_vocabp(truncate_vocab(voc, min_freq))
   vocab_uni = reduce(lambda ret, voc: ret.update(voc) or ret, vocabs, {})
-  trie = _mk_trie(vocab_uni)
 
-  # tokenize T with trie
+  # make tokenizer & load text & tokenize
+  tokenizer = make_tokenizer(vocab_uni)
   T, _ = load_dataset('train', normalize=True)
-  T_toks: List[str] = reduce(lambda ret, sent: ret.extend(_tokenize(trie, sent, n_beam)) or ret, T, [])
+  T_toks: List[str] = reduce(lambda ret, sent: ret.extend(tokenizer(sent, n_beam)) or ret, T, [])
 
   # collect all tokens as the new vocab
   out_dp = LOG_PATH / 'kgram'
   out_dp.mkdir(exist_ok=True, parents=True)
-  dump_vocab(Counter(T_toks), out_dp / 'vocab.txt', sort=True)
+  dump_vocab(truncate_vocab(Counter(T_toks), min_freq), out_dp / 'vocab.txt', sort=True)
 
 
 if __name__ == '__main__':

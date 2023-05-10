@@ -102,8 +102,8 @@ def train(name, model, datasets, logger):
 
 if __name__ == '__main__':
   parser = ArgumentParser()
-  parser.add_argument('--analyzer', choices=['char', '2gram', '3gram', 'kgram'], help='tokenize level')
-  parser.add_argument('--model', choices=['DNN', 'CNN', 'RNN'], help='model arch')
+  parser.add_argument('-L', '--analyzer', choices=['char', '2gram', '3gram', 'kgram'], help='tokenize level')
+  parser.add_argument('-M', '--model', choices=['DNN', 'CNN', 'RNN'], help='model arch')
   parser.add_argument('--name', help='exp name (optional)')
   parser.add_argument('--eval', action='store_true', help='compare result scores')
   args = parser.parse_args()

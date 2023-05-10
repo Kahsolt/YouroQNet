@@ -55,11 +55,11 @@ def load_dataset(split:str, normalize:bool=False, fp:Path=None) -> Tuple[np.ndar
 
   fp_norm = fp or DATA_PATH / f'{split}_cleaned.csv'
   if normalize and fp_norm.exists():
-    print(f'load split {split} from preprocessed {fp_norm}')
+    print(f'load cleaned {split} from cache {fp_norm}')
     return load_dataset(split, False, fp_norm)
 
-  fp_orig = fp or DATA_PATH / f'{split}.csv'
-  df = pd.read_csv(fp_orig)
+  fp = fp or DATA_PATH / f'{split}.csv'
+  df = pd.read_csv(fp)
   c_lbl, c_txt = df.columns[0], df.columns[-1]
   if split == 'valid':    # the whole valid set is too large
     df = pd.concat([df_cls.sample(n=1000, random_state=RANDSEED) for _, df_cls in df.groupby(c_lbl)])

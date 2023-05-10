@@ -2,43 +2,16 @@
 # Author: Armit
 # Create Time: 2023/05/03 
 
-from pathlib import Path
 from functools import reduce
 from copy import deepcopy
-from collections import Counter, defaultdict, OrderedDict
-from typing import List, Dict, Callable
+from collections import Counter, defaultdict
+from typing import List, Callable
 
 import jieba
-import pandas as pd
 import matplotlib.pyplot as plt
-from wordcloud import WordCloud
 
-from utils import LOG_PATH, DATA_PATH, SPLITS, N_CLASS, load_dataset
-
-
-def load_vocab(fp:str) -> Dict[str, int]:
-  with open(fp, encoding='utf-8') as fh:
-    lines = fh.read().rstrip().split('\n')
-  val_cnt = [line.split('\t') for line in lines]
-  return {v: int(c) for v, c in val_cnt}
-
-
-def sort_vocab(voc:Dict[str, int]) -> Dict[str, int]:
-  pairs = sorted([(c, v) for v, c in voc.items()], reverse=True)
-  voc = OrderedDict([(v, c) for c, v in pairs])
-  return voc
-
-
-def dump_vocab(voc:Dict[str, int], fp:str, sort:bool=False):
-  if sort: voc = sort_vocab(voc)
-
-  wc = WordCloud(font_path='simhei.ttf', height=1600, width=2048, background_color='white')
-  wc.fit_words(voc)
-  wc.to_file(Path(fp).with_suffix('.png'))
-
-  with open(fp, 'w', encoding='utf-8') as fh:
-    for v, c in voc.items():
-      fh.write(f'{v}\t{c}\n')
+from utils import LOG_PATH, SPLITS, N_CLASS, load_dataset
+from mk_vocab import load_vocab, dump_vocab, sort_vocab
 
 
 def write_stats(tokens:List[str], name:str, subfolder:str=''):

@@ -43,7 +43,6 @@ except:
   print('fasttext not installed, some of the features may not work')
 
 from utils import *
-from mk_stats import load_vocab
 from mk_vocab import make_tokenizer
 
 FASTTEXT_CKPT_PATH = DATA_PATH / 'cc.zh.300.bin'
@@ -52,13 +51,25 @@ Dataset = Tuple[np.ndarray, np.ndarray]
 Datasets = Tuple[Dataset, ...]
 Scores = Tuple[List[float], List[float], List[float], np.ndarray]
 
+FEATURES = [
+  'tfidf',
+  'fasttext',
+]
+ANALYZERS = [
+  'char',
+  'word',
+  'sent',
+  '2gram',
+  '3gram',
+  'kgram',
+]
 MODELS = {
   'knn-5':   lambda: KNeighborsClassifier(n_neighbors=5),
   'knn-7':   lambda: KNeighborsClassifier(n_neighbors=7),
   'knn-10':  lambda: KNeighborsClassifier(n_neighbors=10),
   'knn-20':  lambda: KNeighborsClassifier(n_neighbors=20),
-  'dt':      lambda: DecisionTreeClassifier(max_depth=3),
-  'et':      lambda: ExtraTreeClassifier(max_depth=3),
+  'dt':      lambda: DecisionTreeClassifier(max_depth=8),
+  'et':      lambda: ExtraTreeClassifier(max_depth=8),
   'rf':      lambda: RandomForestClassifier(n_estimators=16),
   'ets':     lambda: ExtraTreesClassifier(n_estimators=16, max_depth=3),
 #  'vote':    lambda: VotingClassifier(),
@@ -245,8 +256,8 @@ def run_model(name, model, datasets:Datasets, logger:Logger) -> Scores:
 
 
 def make_cmp_eval():
-  for feature in ['tfidf', 'fasttext']:
-    for analyzer in ['char', 'word', 'sent']:
+  for feature in FEATURES:
+    for analyzer in ANALYZERS:
       out_dp = LOG_PATH / analyzer / feature
       if not out_dp.exists(): continue
 
@@ -288,8 +299,8 @@ def make_cmp_eval():
 
 if __name__ == '__main__':
   parser = ArgumentParser()
-  parser.add_argument('--analyzer', choices=['char', 'word', 'sent', '2gram', '3gram', 'kgram'], help='tokenize level')
-  parser.add_argument('--feature',  choices=['tfidf', 'fasttext'], help='input feature')
+  parser.add_argument('-L', '--analyzer', choices=ANALYZERS, help='tokenize level')
+  parser.add_argument('-F', '--feature',  choices=FEATURES, help='input feature')
   parser.add_argument('--eval', action='store_true', help='compare result scores')
   args = parser.parse_args()
 
@@ -308,6 +319,7 @@ if __name__ == '__main__':
   for name, model_fn in MODELS.items():
     print(f'<< running {name}...')
     try:
+      logger.info(f'exp: {args.feature}-{args.analyzer}-{name}')
       precs, recalls, f1s, cmats = run_model(name, model_fn(), datasets, logger)
       result[name] = {
         'prec': precs,

@@ -28,7 +28,7 @@ And, code repo for the qualifying stage is here: [第二届“司南杯”初赛
     - fasttext==0.9.2 requires numpy<1.24 (things might changed)
   - `mk_preprocess.cmd` for making clean datasets, stats, plots & vocabs etc... (~7 minutes)
   - `python vis_project.py` to see 3d data projection (you will understand what the fuck this dataset is 👿)
-  - `run_baseline.cmd` for classic models (>20 minutes)
+  - `run_baseline.cmd` for classic models
   - `run_quantum.cmd` for quantum models
 
 
@@ -63,6 +63,11 @@ A subset from [simplifyweibo_4_moods](https://github.com/SophonPlus/ChineseNlpCo
   - [ ] multi to binary clf
   - [ ] contrastive learning
   - [ ] learn the difference
+
+
+### Core idea & Contributions
+
+- adaptive k-gram tokenizer (see [mk_vocab.py](mk_vocab.py), test with [vis_tokenizer.py](vis_tokenizer.py))
 
 
 ### references

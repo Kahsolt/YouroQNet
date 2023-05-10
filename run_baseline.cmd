@@ -3,6 +3,8 @@
 IF /I "%1"=="eval" GOTO eval
 
 :train
+ECHO start train ...
+
 python run_baseline_sk.py --analyzer char  --feature tfidf
 python run_baseline_sk.py --analyzer word  --feature tfidf
 python run_baseline_sk.py --analyzer 2gram --feature tfidf
@@ -32,5 +34,9 @@ python run_baseline_vq.py --analyzer 3gram --model RNN
 python run_baseline_vq.py --analyzer kgram --model RNN
 
 :eval
+ECHO start eval ...
+
 python run_baseline_sk.py --eval
 python run_baseline_vq.py --eval
+
+ECHO Done.
