@@ -26,7 +26,7 @@ And, code repo for the qualifying stage is here: [第二届“司南杯”初赛
   - `pip install -r requirements_dev.txt` for extra dependencies
   - `pushd repo & init_repos.cmd & popd` for extra git repos
     - fasttext==0.9.2 requires numpy<1.24 (things might changed)
-  - `run_preprocess.cmd` for dataset stats & plots & vocabs etc...
+  - `mk_preprocess.cmd` for dataset stats & plots & vocabs etc...
   - `run_baseline.cmd` for classic models
   - `run_quantum.cmd` for quantum models
 
@@ -44,6 +44,7 @@ A subset from [simplifyweibo_4_moods](https://github.com/SophonPlus/ChineseNlpCo
   - [x] guess the target test set (`valid.txt`)
   - [x] vocab & freq stats
   - [x] pca & cluster
+- [ ] data relabel
 - [ ] data filtering
   - [ ] stop words
   - [ ] too short / long sententce
