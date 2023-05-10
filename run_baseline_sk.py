@@ -43,6 +43,8 @@ except:
   print('fasttext not installed, some of the features may not work')
 
 from utils import *
+from mk_stats import load_vocab
+from mk_vocab import make_tokenizer
 
 FASTTEXT_CKPT_PATH = DATA_PATH / 'cc.zh.300.bin'
 
@@ -91,7 +93,7 @@ MODELS = {
 
 def run_tfidf(analyzer:str) -> Datasets:
   ''' This should be more like syntaxical feature '''
-  assert analyzer in ['char', 'word']
+  assert analyzer in ['char', 'word'] or analyzer.endswith('gram')
 
   def process_data(split:str, tfidfvec:TfidfVectorizer) -> Tuple[np.ndarray, np.ndarray]:
     T, Y = load_dataset(split, normalize=True)
@@ -106,6 +108,10 @@ def run_tfidf(analyzer:str) -> Datasets:
   elif analyzer == 'word':
     tokenizer = jieba.lcut_for_search
     stop_words = STOP_WORDS_WORD
+  elif analyzer.endswith('gram'):
+    tokenizer = make_tokenizer(LOG_PATH / analyzer / 'vocab.txt')
+    stop_words = None
+    analyzer = 'word'   # NOTE: overrides
 
   tfidfvec = TfidfVectorizer(analyzer=analyzer, tokenizer=tokenizer, stop_words=stop_words)
   X_train, Y_train = process_data('train', tfidfvec)
@@ -116,7 +122,7 @@ def run_tfidf(analyzer:str) -> Datasets:
 
 def run_fasttext(analyzer:str) -> Datasets:
   ''' This should be more like semantical feature '''
-  assert analyzer in ['char', 'word', 'sent']
+  assert analyzer in ['char', 'word', 'sent'] or analyzer.endswith('gram')
 
   if not FASTTEXT_CKPT_PATH.exists():
     import shutil
@@ -134,6 +140,9 @@ def run_fasttext(analyzer:str) -> Datasets:
       X = [np.stack([embed.get_word_vector(w) for w in jieba.cut_for_search(t) if w in embed and w not in STOP_WORDS_WORD], axis=0).mean(axis=0) for t in T]
     elif analyzer == 'sent':
       X = [embed.get_sentence_vector(t) for t in T]
+    elif analyzer.endswith('gram'):
+      tokenizer = make_tokenizer(LOG_PATH / analyzer / 'vocab.txt')
+      X = [np.stack([(embed.get_word_vector(w) if w in embed else embed.get_sentence_vector(w)) for w in tokenizer(t)], axis=0).mean(axis=0) for t in T]
     return np.stack(X, axis=0), Y
 
   X_train, Y_train = process_data('train')
@@ -217,7 +226,7 @@ def run_model(name, model, datasets:Datasets, logger:Logger) -> Scores:
     Y_pred = model.predict(X_split)
 
     prec, recall, f1, _ = precision_recall_fscore_support(Y_split, Y_pred, average=None)
-    cmat = confusion_matrix(Y_split, Y_pred)
+    cmat = confusion_matrix(Y_split, Y_pred, N_CLASS)
     precs  .append(prec)
     recalls.append(recall)
     f1s    .append(f1)
@@ -279,8 +288,8 @@ def make_cmp_eval():
 
 if __name__ == '__main__':
   parser = ArgumentParser()
-  parser.add_argument('--analyzer', choices=['char', 'word', 'sent'], help='tokenize level')
-  parser.add_argument('--feature',  choices=['tfidf', 'fasttext'],    help='input feature')
+  parser.add_argument('--analyzer', choices=['char', 'word', 'sent', '2gram', '3gram', 'kgram'], help='tokenize level')
+  parser.add_argument('--feature',  choices=['tfidf', 'fasttext'], help='input feature')
   parser.add_argument('--eval', action='store_true', help='compare result scores')
   args = parser.parse_args()
 

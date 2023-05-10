@@ -32,6 +32,11 @@ Term = Union[float, None]
 Node = Tuple['Trie', Term]
 Trie = Dict[str, Node]
 
+def _vocab_to_prob(voc:Dict[str, int]) -> Dict[str, float]:
+  cnt = sum(voc.values())
+  for v in voc: voc[v] /= cnt
+  return voc
+
 def _mk_trie(vocab:Dict[str, float]) -> Trie:
   ''' build a trie tree '''
   def _new_node() -> Node:
@@ -97,16 +102,17 @@ def _tokenize(trie:Trie, sent:str, n_beam:int=3) -> List[str]:
 
     candidates = sorted(candidates_new, reverse=True)[:n_beam]
 
-  return reduce(lambda ret, e: ret.extend(e[-1]) or ret, candidates, [])
+  return candidates[0][-1]    # only keep the solution with highest prob
+
+def make_tokenizer(fp:str) -> Callable[[str], List[str]]:
+  trie = _mk_trie(_vocab_to_prob(load_vocab(fp)))
+  return lambda t: _tokenize(trie, t, n_beam=3)
 
 @timer
 def make_kgram(vocabs:List[Dict[str, int]], min_freq:int=3, n_beam:int=3):
   # reverse list & turn freq to prob
   for i, voc in enumerate(vocabs):
-    vocabs[i] = {v: c for v, c in voc.items() if c >= min_freq}
-    voc = vocabs[i]         # get the ref
-    cnt = sum(voc.values())
-    for v in voc: voc[v] /= cnt
+    vocabs[i] = _vocab_to_prob({v: c for v, c in voc.items() if c >= min_freq})
 
   # merge all vocabs & make trie tree
   vocab_uni = reduce(lambda ret, voc: ret.update(voc) or ret, vocabs, {})

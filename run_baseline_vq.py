@@ -89,7 +89,7 @@ def train(name, model, datasets, logger):
     Y_split = locals().get(f'Y_{split}')
     Y_pred = model.predict(X_split)
 
-    cmat = confusion_matrix(Y_split, Y_pred)
+    cmat = confusion_matrix(Y_split, Y_pred, N_CLASS)
 
     logger.info('>> confusion_matrix:')
     logger.info(cmat)
