@@ -143,14 +143,14 @@ def run_fasttext(analyzer:str) -> Datasets:
 
 
 def run_visualize(datasets:Datasets, name:str, out_dp:Path):
-  (X_train, Y_train), (X_test,  Y_test), (X_valid, Y_valid) = datasets
+  (X_train, Y_train), (X_test, Y_test), (X_valid, Y_valid) = datasets
 
   def save_plot(fp:Path, z_train, z_test, z_valid, s=1):
     nonlocal Y_train, Y_test, Y_valid
 
     plt.subplot(221)
     plt.scatter(z_train[:, 0], z_train[:, 1], s, c=Y_train, marker='o', alpha=0.7, label='train')
-    plt.scatter(z_test [:, 0], z_test [:, 1], s, c=Y_test,  marker='x', alpha=0.7, label='train')
+    plt.scatter(z_test [:, 0], z_test [:, 1], s, c=Y_test,  marker='x', alpha=0.7, label='test')
     plt.scatter(z_valid[:, 0], z_valid[:, 1], s, c=Y_valid, marker='*', alpha=0.7, label='valid')
     plt.axis('off')
     plt.title('all')
@@ -166,7 +166,7 @@ def run_visualize(datasets:Datasets, name:str, out_dp:Path):
     plt.title('train')
     
     plt.subplot(224)
-    plt.scatter(z_test [:, 0], z_test [:, 1], s, c=Y_test,  marker='x', alpha=0.7, label='train')
+    plt.scatter(z_test [:, 0], z_test [:, 1], s, c=Y_test,  marker='x', alpha=0.7, label='test')
     plt.axis('off')
     plt.title('test')
     
@@ -202,7 +202,7 @@ def run_visualize(datasets:Datasets, name:str, out_dp:Path):
 
 
 def run_model(name, model, datasets:Datasets, logger:Logger) -> Scores:
-  (X_train, Y_train), (X_test,  Y_test), (X_valid, Y_valid) = datasets
+  (X_train, Y_train), (X_test, Y_test), (X_valid, Y_valid) = datasets
 
   model.fit(X_train, Y_train)
 
