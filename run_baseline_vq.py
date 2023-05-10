@@ -89,16 +89,8 @@ def train(name, model, datasets, logger):
     Y_split = locals().get(f'Y_{split}')
     Y_pred = model.predict(X_split)
 
-    prec, recall, f1, _ = precision_recall_fscore_support(Y_split, Y_pred, average=None)
     cmat = confusion_matrix(Y_split, Y_pred)
-    precs  .append(prec)
-    recalls.append(recall)
-    f1s    .append(f1)
-    cmats  .append(cmat)
 
-    logger.info(f'>> prec: {prec}')
-    logger.info(f'>> recall: {recall}')
-    logger.info(f'>> f1: {f1}')
     logger.info('>> confusion_matrix:')
     logger.info(cmat)
   
@@ -116,26 +108,19 @@ if __name__ == '__main__':
   parser.add_argument('--eval', action='store_true', help='compare result scores')
   args = parser.parse_args()
 
+  exit(0)
+
   out_dp: Path = LOG_PATH / args.analyzer / (args.name or args.model)
   out_dp.mkdir(exist_ok=True, parents=True)
 
-  train_set = load_dataset('train')
-  test_set  = load_dataset('test')
-  valid_set = load_dataset('valid')
+  train_set = load_dataset('train', normalize=True)
+  test_set  = load_dataset('test' , normalize=True)
+  valid_set = load_dataset('valid', normalize=True)
 
   logger = get_logger(out_dp / 'run.log', mode='w')
   result = { }
-  for name, model_fn in MODELS.items():
-    print(f'<< running {name}...')
-    try:
-      precs, recalls, f1s, cmats = train(name, model_fn(), train_set, logger)
-      result[name] = {
-        'prec': precs,
-        'recall': recalls,
-        'f1': f1s,
-        'cmat': cmats,
-      }
-    except: print_exc()
+
+  raise NotImplementedError
 
   with open(out_dp / 'result.pkl', 'wb') as fh:
     pkl.dump(result, fh)

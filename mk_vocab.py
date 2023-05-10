@@ -10,12 +10,12 @@ from argparse import ArgumentParser
 from collections import defaultdict, Counter
 from typing import Callable, Dict, Union, Tuple, List
 
-from utils import *
+from utils import LOG_PATH, load_dataset, timer
 from mk_stats import dump_vocab, load_vocab
 
 
 def make_ngram(n:int=2, line_parser:Callable=list):
-  T, _ = load_dataset('train')
+  T, _ = load_dataset('train', normalize=True)
   voc = defaultdict(int)
   for t in T:
     chars = line_parser(t)
@@ -113,7 +113,7 @@ def make_kgram(vocabs:List[Dict[str, int]], min_freq:int=3, n_beam:int=3):
   trie = _mk_trie(vocab_uni)
 
   # tokenize T with trie
-  T, _ = load_dataset('train')
+  T, _ = load_dataset('train', normalize=True)
   T_toks: List[str] = reduce(lambda ret, sent: ret.extend(_tokenize(trie, sent, n_beam)) or ret, T, [])
 
   # collect all tokens as the new vocab
@@ -135,7 +135,7 @@ if __name__ == '__main__':
   if args.ngram:
     # fixed n-gram
     for n in Ns:
-      print(f'making vocab for {n}gram ...')
+      print(f'>> making {n}gram ...')
       make_ngram(n)
 
   if args.kgram:
@@ -143,5 +143,5 @@ if __name__ == '__main__':
     vocabs = []
     for n in Ns:
       vocabs.append(load_vocab(LOG_PATH / f'{n}gram' / 'vocab.txt'))
-    print('making vocab for kgram ...')
+    print('>> making kgram ...')
     make_kgram(vocabs, min_freq=args.min_freq, n_beam=args.n_beam)

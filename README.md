@@ -19,15 +19,15 @@ And, code repo for the qualifying stage is here: [第二届“司南杯”初赛
 
 ⚪ for contest problem evaluation only
 
-  - `python run.py`
+  - `python answer.py`
 
 ⚪ for full development
 
   - `pip install -r requirements_dev.txt` for extra dependencies
   - `pushd repo & init_repos.cmd & popd` for extra git repos
     - fasttext==0.9.2 requires numpy<1.24 (things might changed)
-  - `mk_preprocess.cmd` for dataset stats & plots & vocabs etc...
-  - `run_baseline.cmd` for classic models
+  - `mk_preprocess.cmd` for dataset stats & plots & vocabs etc... (~7 minutes)
+  - `run_baseline.cmd` for classic models (>20 minutes)
   - `run_quantum.cmd` for quantum models
 
 

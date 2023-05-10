@@ -4,7 +4,7 @@
 
 import pandas as pd
 
-from utils import *
+from utils import DATA_PATH, COULMNS, SPLITS, load_dataset
 
 df_to_set = lambda x: { tuple(it) for it in x.to_numpy().tolist() }
 set_to_df = lambda x: pd.DataFrame(x, columns=COULMNS, index=None)
@@ -35,8 +35,25 @@ def make_validset():
     df_ttv = pd.concat([df_known, df_valid])
     df_unknown = set_to_df(df_to_set(df_ttv) - df_to_set(df_all))
     df_unknown.to_csv(DATA_PATH / 'unknown.csv', index=None)
-    print(f'unknown:\t{len(df_unknown)}')
+    print(f'unk:\t{len(df_unknown)}')
+
+
+def make_cleaned(split:str):
+  fp = DATA_PATH / f'{split}_cleaned.csv'
+
+  T, Y = load_dataset(split, normalize=True)
+
+  df = pd.DataFrame()
+  df[COULMNS[ 0]] = pd.Series(Y)
+  df[COULMNS[-1]] = pd.Series(T)
+  df.to_csv(fp, index=None)
+  print(f'saving cleaned {split} to {fp}...')
 
 
 if __name__ == '__main__':
+  print('>> making validset ...')
   make_validset()
+
+  for split in SPLITS:
+    print(f'>> making cleaned {split}...')
+    make_cleaned(split)

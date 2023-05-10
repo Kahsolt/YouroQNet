@@ -13,7 +13,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 
-from utils import *
+from utils import LOG_PATH, DATA_PATH, SPLITS, N_CLASS, load_dataset
 
 
 def load_vocab(fp:str) -> Dict[str, int]:
@@ -45,7 +45,7 @@ def write_stats(tokens:List[str], name:str, subfolder:str=''):
   out_dp = LOG_PATH / subfolder / 'stats'
   out_dp.mkdir(exist_ok=True, parents=True)
 
-  voc = sort_vocab(Counter(tokens).items())
+  voc = sort_vocab(Counter(tokens))
   dump_vocab(voc, out_dp / f'vocab_{name}.txt')
 
   with open(out_dp / f'stats_{name}.txt', 'w', encoding='utf-8') as fh:
@@ -75,8 +75,7 @@ def write_lens(lens:List[int], name:str, subfolder:str=''):
 def make_stats(kind:str, line_parser:Callable):
   words_all = []
   for split in SPLITS:
-    df = pd.read_csv(DATA_PATH / f'{split}.csv')
-    label, text = df['label'].to_numpy().astype(int), df['text'].to_numpy()
+    text, label = load_dataset(split, normalize=True)
 
     words_cls = defaultdict(list)
     lens_cls  = defaultdict(list)
@@ -139,11 +138,18 @@ def uniq_vocab(kind:str):
 
 
 if __name__ == '__main__':
-  make_stats('char', list)
-  make_stats('word', jieba.lcut_for_search)
+  LINE_PARSER = {
+    'char': list,
+    'word': jieba.lcut_for_search,
+  }
+  for level in ['char', 'word']:
+    print(f'>> making stats for {level} level ...')
+    make_stats(level, LINE_PARSER[level])
 
-  diff_vocab('char')
-  diff_vocab('word')
+  for level in ['char', 'word']:
+    print(f'>> diff vocab for {level} level ...')
+    diff_vocab(level)
 
-  uniq_vocab('char')
-  uniq_vocab('word')
+  for level in ['char', 'word']:
+    print(f'>> uniq vocab for {level} level...')
+    uniq_vocab(level)
