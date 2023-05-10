@@ -3,6 +3,7 @@
 # Create Time: 2023/05/05 
 
 from pathlib import Path
+from time import time
 import logging
 from logging import Logger
 from typing import List, Tuple
@@ -39,10 +40,23 @@ def get_logger(fp:str, mode:str='a') -> Logger:
   return logger
 
 
-def load_dataset(split:str) -> Tuple[np.ndarray, List[str]]:
-  df = pd.read_csv(DATA_PATH / f'{split}.csv')
+def timer(fn):
+  def wrapper(*args, **kwargs):
+    start = time()
+    r = fn(*args, **kwargs)
+    end = time()
+    print(f'[Timer]: {fn.__name__} took {end - start:.2f}s')
+    return r
+  return wrapper
+
+
+def load_dataset(split:str, fp:Path=None) -> Tuple[np.ndarray, List[str]]:
+  ''' `fp` is for file remapping/relocation '''
+  fp = fp or DATA_PATH / f'{split}.csv'
+  df = pd.read_csv(fp)
   c_lbl, c_txt = df.columns[0], df.columns[-1]
-  if split == 'valid': df = pd.concat([df_cls.sample(n=1000, random_state=RANDSEED) for _, df_cls in df.groupby(c_lbl)])
+  if split == 'valid':    # the whole valid set is too large
+    df = pd.concat([df_cls.sample(n=1000, random_state=RANDSEED) for _, df_cls in df.groupby(c_lbl)])
   Y = df[c_lbl].to_numpy().astype(np.int32)
   T = df[c_txt].to_numpy().tolist()
   return T, Y

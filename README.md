@@ -44,13 +44,15 @@ A subset from [simplifyweibo_4_moods](https://github.com/SophonPlus/ChineseNlpCo
   - [x] guess the target test set (`valid.txt`)
   - [x] vocab & freq stats
   - [x] pca & cluster
-- [ ] data relabel
+  - [ ] data relabel (?)
 - [ ] data filtering
-  - [ ] stop words
+  - [ ] punctuation sanitize
+  - [ ] stop words removal
   - [ ] too short / long sententce
 - [x] feature extraction
   - [x] tf-idf (syntaxical)
   - [x] fasttext embedding (sematical)
+  - [ ] adaptive tokenizer
 - [x] baseline models
   - [x] sklearn
   - [ ] vqnet-classical

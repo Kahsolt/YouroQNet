@@ -90,9 +90,9 @@ def make_stats(kind:str, line_parser:Callable):
       write_stats(words_cls[cls], f'{split}_{cls}', subfolder=kind)
       write_lens (lens_cls [cls], f'{split}_{cls}', subfolder=kind)
     # split-wise
-    words_split = reduce(lambda x, y: x.extend(y) or x, words_cls.values(), [])
+    words_split = reduce(lambda ret, words: ret.extend(words) or ret, words_cls.values(), [])
     write_stats(words_split, split, subfolder=kind)
-    lens_split = reduce(lambda x, y: x.extend(y) or x, lens_cls.values(), [])
+    lens_split = reduce(lambda ret, lens: ret.extend(lens) or ret, lens_cls.values(), [])
     write_lens(lens_split, split, subfolder=kind)
 
     words_all.extend(words_split)
