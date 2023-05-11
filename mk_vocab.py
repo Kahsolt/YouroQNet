@@ -11,8 +11,6 @@ from argparse import ArgumentParser
 from collections import defaultdict, Counter, OrderedDict
 from typing import Callable, Dict, Union, Tuple, List, Optional
 
-from wordcloud import WordCloud
-
 from utils import LOG_PATH, load_dataset, timer
 
 ''' vocab '''
@@ -29,9 +27,12 @@ def load_vocab(fp:str) -> Vocab:
 def dump_vocab(voc:Vocab, fp:str, sort:bool=False):
   if sort: voc = sort_vocab(voc)
 
-  wc = WordCloud(font_path='simhei.ttf', height=1600, width=2048, background_color='white')
-  wc.fit_words(voc)
-  wc.to_file(Path(fp).with_suffix('.png'))
+  try:
+    from wordcloud import WordCloud
+    wc = WordCloud(font_path='simhei.ttf', height=1600, width=2048, background_color='white')
+    wc.fit_words(voc)
+    wc.to_file(Path(fp).with_suffix('.png'))
+  except: pass
 
   with open(fp, 'w', encoding='utf-8') as fh:
     for v, c in voc.items():
@@ -221,6 +222,10 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   Ns = [2, 3, 4, 5]
+
+  if not args.ngram and not args.kgram:   # suger defaults
+    args.ngram = True
+    args.kgram = True
 
   if args.ngram:
     # fixed n-gram

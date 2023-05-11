@@ -13,23 +13,29 @@ And, code repo for the qualifying stage is here: [第二届“司南杯”初赛
 
 ⚪ install
 
-  - `conda create -n q python==3.8` (pyvqnet requires Python 3.8)
-  - `conda activate q`
-  - `pip install -r requirements.txt`
+- `conda create -n q python==3.8` (pyvqnet requires Python 3.8)
+- `conda activate q`
+- `pip install -r requirements.txt`
 
-⚪ for contest problem evaluation only
+⚪ for contest problem (👈 **Follow this to reproduce our contest results!!**)
 
-  - `python answer.py`
+- preprocess
+  - `python mk_vocab.py`
+- train
+  - `python run_quantum.py`
+- evaluate
+  - `python answer.py` for prediction results
+  - `python check.py` for metrics score
 
 ⚪ for full development
 
-  - `pip install -r requirements_dev.txt` for extra dependencies
-  - `pushd repo & init_repos.cmd & popd` for extra git repos
-    - fasttext==0.9.2 requires numpy<1.24 (things might changed)
-  - `mk_preprocess.cmd` for making clean datasets, stats, plots & vocabs etc... (~7 minutes)
-  - `python vis_project.py` to see 3d data projection (you will understand what the fuck this dataset is 👿)
-  - `run_baseline.cmd` for classic models
-  - `run_quantum.cmd` for quantum models
+- `pip install -r requirements_dev.txt` for extra dependencies
+- `pushd repo & init_repos.cmd & popd` for extra git repos
+  - fasttext==0.9.2 requires numpy<1.24 (things might changed)
+- `mk_preprocess.cmd` for making clean datasets, stats, plots & vocabs etc... (~7 minutes)
+- `python vis_project.py` to see 3d data projection (you will understand what the fuck this dataset is 👿)
+- `run_baseline.cmd` for classic models
+- `run_quantum.cmd` for quantum models
 
 
 #### Dataset

@@ -49,7 +49,7 @@ def timer(fn):
 if 'consts for dataset':
   N_CLASS = 4
   COULMNS = ['label', 'text']
-  SPLITS  = ['train', 'test', 'valid']
+  SPLITS  = ['train', 'test', 'valid'] if sys.platform == 'win32' else ['train', 'test']
 
 def load_dataset(split:str, normalize:bool=False, fp:Path=None) -> Tuple[np.ndarray, List[str]]:
   ''' `fp` overrides the default filepath '''
