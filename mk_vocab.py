@@ -68,6 +68,20 @@ def make_ngram(n:int=2, line_parser:Callable=list):
   out_dp.mkdir(exist_ok=True, parents=True)
   dump_vocab(voc, out_dp / 'vocab.txt', sort=True)
 
+def make_char(line_parser:Callable=list):
+  ''' special for `make_ngram()` when n=1 '''
+
+  T, _ = load_dataset('train', normalize=True)
+  voc = defaultdict(int)
+  for t in T:
+    for ch in line_parser(t):
+      voc[ch] += 1
+
+  out_dp = LOG_PATH / 'char'
+  out_dp.mkdir(exist_ok=True, parents=True)
+  dump_vocab(voc, out_dp / 'vocab.txt', sort=True)
+
+
 ''' kgram '''
 
 Term = Union[float, None]
@@ -229,6 +243,8 @@ if __name__ == '__main__':
 
   if args.ngram:
     # fixed n-gram
+    print('>> making char ...')
+    make_char()
     for n in Ns:
       print(f'>> making {n}gram ...')
       make_ngram(n)
