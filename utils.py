@@ -2,6 +2,7 @@
 # Author: Armit
 # Create Time: 2023/05/05 
 
+import sys
 from pathlib import Path
 from time import time
 import logging
@@ -14,7 +15,7 @@ import numpy as np
 
 RANDSEED = 114514
 
-DATA_PATH = Path('data')
+DATA_PATH = Path('data') if sys.platform == 'win32' else Path('.')
 LOG_PATH  = Path('log') ; LOG_PATH.mkdir(exist_ok=True)
 
 ''' utils '''
