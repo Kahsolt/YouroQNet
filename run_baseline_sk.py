@@ -107,7 +107,7 @@ def run_tfidf(analyzer:str) -> Datasets:
   assert analyzer in ['char', 'word'] or analyzer.endswith('gram')
 
   def process_data(split:str, tfidfvec:TfidfVectorizer) -> Tuple[np.ndarray, np.ndarray]:
-    T, Y = load_dataset(split, normalize=True)
+    T, Y = load_dataset(split)
     tfidf = tfidfvec.fit_transform(T) if split == 'train' else tfidfvec.transform(T)
     X = tfidf.todense()     # [N=1600, K=3386]
     if isinstance(X, np.matrix): X = X.A
@@ -144,7 +144,7 @@ def run_fasttext(analyzer:str) -> Datasets:
   embed: FastText = fasttext.load_model(str(FASTTEXT_CKPT_PATH))
 
   def process_data(split:str) -> Dataset:
-    T, Y = load_dataset(split, normalize=True)
+    T, Y = load_dataset(split)
     if analyzer == 'char':
       X = [np.stack([embed.get_word_vector(w) for w in list(t) if w in embed and w not in STOP_WORDS_CHAR], axis=0).mean(axis=0) for t in T]
     elif analyzer == 'word':

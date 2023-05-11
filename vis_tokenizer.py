@@ -7,7 +7,7 @@ from utils import SPLITS
 
 
 def run_tokenize(split:str):
-  T, _ = load_dataset(split, normalize=True)
+  T, _ = load_dataset(split)
   tokenizer = make_tokenizer()  # default to kgram
   for t in T:
     for logp, segs in tokenizer(t, top_k=-1):

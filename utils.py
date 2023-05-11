@@ -51,7 +51,7 @@ if 'consts for dataset':
   COULMNS = ['label', 'text']
   SPLITS  = ['train', 'test', 'valid'] if sys.platform == 'win32' else ['train', 'test']
 
-def load_dataset(split:str, normalize:bool=False, fp:Path=None) -> Tuple[np.ndarray, List[str]]:
+def load_dataset(split:str, normalize:bool=True, fp:Path=None) -> Tuple[np.ndarray, List[str]]:
   ''' `fp` overrides the default filepath '''
 
   fp_norm = fp or DATA_PATH / f'{split}_cleaned.csv'

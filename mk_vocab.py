@@ -56,7 +56,7 @@ def vocab_to_vocabp(voc:Vocab) -> VocabP:
 ''' ngram '''
 
 def make_ngram(n:int=2, line_parser:Callable=list):
-  T, _ = load_dataset('train', normalize=True)
+  T, _ = load_dataset('train')
   voc = defaultdict(int)
   for t in T:
     chars = line_parser(t)
@@ -71,7 +71,7 @@ def make_ngram(n:int=2, line_parser:Callable=list):
 def make_char(line_parser:Callable=list):
   ''' special for `make_ngram()` when n=1 '''
 
-  T, _ = load_dataset('train', normalize=True)
+  T, _ = load_dataset('train')
   voc = defaultdict(int)
   for t in T:
     for ch in line_parser(t):
@@ -218,7 +218,7 @@ def make_kgram(vocabs:List[Vocab], min_freq:int=3, n_beam:int=4):
 
   # make tokenizer & load text & tokenize
   tokenizer = make_tokenizer(vocab_uni)
-  T, _ = load_dataset('train', normalize=True)
+  T, _ = load_dataset('train')
   T_toks: List[str] = reduce(lambda ret, sent: ret.extend(tokenizer(sent, n_beam)) or ret, T, [])
 
   # collect all tokens as the new vocab

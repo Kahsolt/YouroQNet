@@ -41,7 +41,7 @@ def make_validset():
 def make_cleaned(split:str):
   fp = DATA_PATH / f'{split}_cleaned.csv'
 
-  T, Y = load_dataset(split, normalize=True)
+  T, Y = load_dataset(split)
 
   df = pd.DataFrame()
   df[COULMNS[ 0]] = pd.Series(Y)

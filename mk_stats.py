@@ -48,7 +48,7 @@ def write_lens(lens:List[int], name:str, subfolder:str=''):
 def make_stats(kind:str, line_parser:Callable):
   words_all = []
   for split in SPLITS:
-    text, label = load_dataset(split, normalize=True)
+    text, label = load_dataset(split)
 
     words_cls = defaultdict(list)
     lens_cls  = defaultdict(list)
