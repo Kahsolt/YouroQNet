@@ -3,20 +3,41 @@
 # Create Time: 2023/05/05 
 
 import sys
+import random
 from pathlib import Path
 from time import time
 import logging
 from logging import Logger
 from traceback import print_exc
-from typing import List, Tuple
+from typing import List, Tuple, Generator
 
 import pandas as pd
 import numpy as np
 
-RANDSEED = 114514
+from pyvqnet.tensor import QTensor
+from pyvqnet.nn import Module
+from pyvqnet.utils.storage import load_parameters, save_parameters
+
+RANDSEED  = 114514
 
 DATA_PATH = Path('data') if sys.platform == 'win32' else Path('.')
 LOG_PATH  = Path('log') ; LOG_PATH.mkdir(exist_ok=True)
+
+ANALYZERS = [
+  'char',
+  '2gram',
+  '3gram',
+  'kgram',
+  '2gram+',   # +char
+  '3gram+',
+  'kgram+',
+]
+
+Dataloader = Generator[Tuple[QTensor, QTensor], None, None]
+Dataset    = Tuple[List[str], np.ndarray]
+Datasets   = Tuple[Dataset, ...]
+Score      = Tuple[float, float, float, np.ndarray]
+Scores     = Tuple[List[float], List[float], List[float], List[np.ndarray]]   # multi splits
 
 ''' utils '''
 
@@ -43,6 +64,11 @@ def timer(fn):
     return r
   return wrapper
 
+def load_ckpt(model:Module, fp:str):
+  model.load_state_dict(load_parameters(fp))
+
+def save_ckpt(model:Module, fp:str):
+  save_parameters(model.state_dict(), fp)
 
 ''' dataset & text'''
 
@@ -51,7 +77,7 @@ if 'consts for dataset':
   COULMNS = ['label', 'text']
   SPLITS  = ['train', 'test', 'valid'] if sys.platform == 'win32' else ['train', 'test']
 
-def load_dataset(split:str, normalize:bool=True, fp:Path=None) -> Tuple[np.ndarray, List[str]]:
+def load_dataset(split:str, normalize:bool=True, fp:Path=None, seed:int=RANDSEED) -> Dataset:
   ''' `fp` overrides the default filepath '''
 
   fp_norm = fp or DATA_PATH / f'{split}_cleaned.csv'
@@ -63,12 +89,11 @@ def load_dataset(split:str, normalize:bool=True, fp:Path=None) -> Tuple[np.ndarr
   df = pd.read_csv(fp)
   c_lbl, c_txt = df.columns[0], df.columns[-1]
   if split == 'valid':    # the whole valid set is too large
-    df = pd.concat([df_cls.sample(n=1000, random_state=RANDSEED) for _, df_cls in df.groupby(c_lbl)])
+    df = pd.concat([df_cls.sample(n=1000, random_state=seed) for _, df_cls in df.groupby(c_lbl)])
   Y = df[c_lbl].to_numpy().astype(np.int32)
   T = df[c_txt].to_numpy().tolist()
   if normalize: T = clean_text(T)
   return T, Y
-
 
 if 'consts for text':
   from re import compile as Regex
@@ -136,21 +161,9 @@ def clean_text(texts:List[str]) -> List[str]:
     return s
   return [_process(line) for line in texts]
 
-
-''' metric '''
-
-def confusion_matrix(pred, truth, num_class:int=None):
-  num_class = num_class or max(truth) + 1
-
-  cmat = np.zeros([num_class, num_class], dtype=np.int32)
-  for p, t in zip(pred, truth): cmat[t, p] += 1
-  return cmat
-
-
-if __name__ == '__main__':
-  N = 1024
-  num_class = 4
-  pred  = np.random.randint(0, num_class, size=[N])
-  truth = np.random.randint(0, num_class, size=[N])
-  cmat = confusion_matrix(pred, truth)
-  print(cmat)
+def align_text(n_limit:int, words:List[str], pad:str='') -> List[str]:
+  nlen = len(words)
+  if nlen == n_limit: return words
+  if nlen  < n_limit: return words + [pad] * (n_limit - nlen)
+  cp = random.randrange(nlen - n_limit)
+  return words[cp : cp + n_limit]

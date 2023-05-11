@@ -6,7 +6,7 @@ import pickle as pkl
 from pathlib import Path
 from argparse import ArgumentParser
 from traceback import print_exc
-from typing import Tuple, List
+from typing import Tuple
 import warnings ; warnings.simplefilter("ignore")
 
 import jieba
@@ -46,10 +46,6 @@ from utils import *
 from mk_vocab import make_tokenizer
 
 FASTTEXT_CKPT_PATH = DATA_PATH / 'cc.zh.300.bin'
-
-Dataset = Tuple[np.ndarray, np.ndarray]
-Datasets = Tuple[Dataset, ...]
-Scores = Tuple[List[float], List[float], List[float], np.ndarray]
 
 FEATURES = [
   'tfidf',
@@ -237,7 +233,7 @@ def run_model(name, model, datasets:Datasets, logger:Logger) -> Scores:
     Y_pred = model.predict(X_split)
 
     prec, recall, f1, _ = precision_recall_fscore_support(Y_split, Y_pred, average=None)
-    cmat = confusion_matrix(Y_split, Y_pred, N_CLASS)
+    cmat = confusion_matrix(Y_split, Y_pred)
     precs  .append(prec)
     recalls.append(recall)
     f1s    .append(f1)
@@ -322,10 +318,10 @@ if __name__ == '__main__':
       logger.info(f'exp: {args.feature}-{args.analyzer}-{name}')
       precs, recalls, f1s, cmats = run_model(name, model_fn(), datasets, logger)
       result[name] = {
-        'prec': precs,
+        'prec':   precs,
         'recall': recalls,
-        'f1': f1s,
-        'cmat': cmats,
+        'f1':     f1s,
+        'cmat':   cmats,
       }
     except: print_exc()
 

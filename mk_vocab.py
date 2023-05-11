@@ -90,6 +90,7 @@ Trie = Dict[str, Node]
 TokenizedS = List[str]
 TokenizedP = List[Tuple[float, List[str]]]
 Tokenized = Union[TokenizedS, TokenizedP]
+Tokenizer = Callable[[str, Optional[int], Optional[int]], Tokenized]
 
 def _mk_trie(vocab:VocabP) -> Trie:
   ''' build a trie tree '''
@@ -183,7 +184,7 @@ def _tokenize_bidirectional(trie:Trie, trie_rev:Trie, sent:str, n_beam:int=3, to
   if top_k  > 0:    return res[:top_k]
   if top_k <= 0:    return res
 
-def make_tokenizer(fp_or_vocab:Union[str, Vocab, VocabP]=None, bidrectional:bool=True) -> Callable[[str, Optional[int], Optional[int]], Tokenized]:
+def make_tokenizer(fp_or_vocab:Union[str, Vocab, VocabP]=None, bidrectional:bool=True) -> Tokenizer:
   ''' use a vocab to build a tokenizer '''
 
   if isinstance(fp_or_vocab, Dict):
