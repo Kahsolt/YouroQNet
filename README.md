@@ -19,13 +19,8 @@ And, code repo for the qualifying stage is here: [第二届“司南杯”初赛
 
 ⚪ for contest problem (👈 **Follow this to reproduce our contest results!!**)
 
-- preprocess
-  - `python mk_vocab.py`
-- train
-  - `python run_quantum.py`
-- evaluate
-  - `python answer.py` for prediction results
-  - `python check.py` for metrics score
+- `python answer.py` for preprocess & train
+- `python check.py` for evaluate
 
 ⚪ for full development
 

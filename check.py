@@ -41,11 +41,10 @@ def get_target_label(fp:str) -> np.ndarray:
 
 
 if __name__ == "__main__":
-  fp = 'data/valid.csv'
-  target = get_target_label(fp)
-  try:
+  for split in ['train', 'test', 'valid']:
+    print(f'[{split}]')
+    fp = f'data/{split}.csv'
+    target = get_target_label(fp)
     solution = question1(fp)
     print('final score:', score(target, solution))
-  except BaseException as e:
-    print("选手代码运行异常, 判错, 错误详情为:%s|0" % e)
-    quit()
+    print()
