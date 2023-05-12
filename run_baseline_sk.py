@@ -326,7 +326,7 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   if args.eval:
-    go_eval()
+    go_eval(args)
     exit(0)
 
-  go_train()
+  go_train(args)

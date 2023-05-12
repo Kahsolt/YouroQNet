@@ -317,7 +317,7 @@ if __name__ == '__main__':
   args = get_args()
 
   if args.eval:
-    go_eval()
+    go_eval(args)
     exit(0)
 
   go_train(args)
