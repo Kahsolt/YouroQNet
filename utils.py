@@ -18,6 +18,7 @@ if 'pyvqnet & pyqpanda':
   from pyqpanda import CPUQVM, Qubit, QVec, ClassicalCondition
   from pyvqnet.tensor import QTensor
   from pyvqnet.nn import Module
+  from pyvqnet.qnn.quantumlayer import QuantumLayer
   from pyvqnet.utils.storage import load_parameters, save_parameters
 
 IS_DEBUG = sys.platform == 'win32'
@@ -42,6 +43,7 @@ ANALYZERS = [
 if 'typing':
   NDArray     = np.ndarray
   QVM         = CPUQVM
+  QModel      = QuantumLayer
   Qubits      = Union[List[Qubit], QVec]
   Cbit        = ClassicalCondition
   Cbits       = List[Cbit]
@@ -56,6 +58,7 @@ if 'typing':
   Metrics     = Tuple[float, float, F1]     # loss, acc, [f1]
 
 mean = lambda x: sum(x) / len(x)
+mode = lambda x: np.argmax(np.bincount(x))
 
 ''' utils '''
 
@@ -105,7 +108,7 @@ def load_dataset(split:str, normalize:bool=True, fp:Path=None, seed:int=RANDSEED
     df = pd.concat([df_cls.sample(n=1000, random_state=seed) for _, df_cls in df.groupby(c_lbl)])
   Y = df[c_lbl].to_numpy().astype(np.int32)
   T = df[c_txt].to_numpy().tolist()
-  if normalize: T = clean_text(T)
+  if normalize: T = clean_texts(T)
   return T, Y
 
 ''' metric '''
@@ -180,7 +183,7 @@ if 'consts for text':
       r.append(chars[i])
     return ''.join(r)
 
-def clean_text(texts:List[str]) -> List[str]:
+def clean_texts(texts:List[str]) -> List[str]:
   def _process(s:str) -> str:
     try:
       s = R_DEADCHAR.sub('', s)
@@ -196,7 +199,7 @@ def clean_text(texts:List[str]) -> List[str]:
     return s
   return [_process(line) for line in texts]
 
-def align_text(n_limit:int, words:List[str], pad:str='') -> List[str]:
+def align_words(words:List[str], n_limit:int, pad:str='') -> List[str]:
   nlen = len(words)
   if nlen == n_limit: return words
   if nlen  < n_limit: return words + [pad] * (n_limit - nlen)

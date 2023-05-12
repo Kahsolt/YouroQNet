@@ -6,7 +6,6 @@ import random
 import json
 from pathlib import Path
 from argparse import ArgumentParser
-from functools import partial
 import warnings ; warnings.simplefilter("ignore")
 
 if 'pyvqnet':
@@ -246,7 +245,7 @@ def gen_dataloader(args, split:str, vocab:Vocab) -> Dataloader:
     indexes = list(range(N))
     if shuffle: random.shuffle(indexes) 
     PAD_ID = word2id.get(args.pad, -1)
-    aligner = partial(align_text, args.length)
+    aligner = lambda x: align_words(x, args.length, args.pad)
 
     for i in range(0, N, args.batch_size):
       T_batch, Y_batch = [], []
