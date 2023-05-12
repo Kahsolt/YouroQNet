@@ -48,7 +48,7 @@ if 'typing':
   Cbit        = ClassicalCondition
   Cbits       = List[Cbit]
   ModelConfig = Tuple[Callable, Any, int, int]   # compute_circuit(), creteron, n_qubit, n_param
-  Dataloader  = Generator[Tuple[QTensor, QTensor], None, None]
+  Dataloader  = Generator[Tuple[NDArray, NDArray], None, None]
   Dataset     = Tuple[List[str], NDArray]   # text, label
   Datasets    = Tuple[Dataset, ...]
   Score       = Tuple[float, float, float, NDArray]   # prec, recall, f1, cmat
@@ -57,8 +57,10 @@ if 'typing':
   AccF1       = Tuple[float, F1]            # acc, [f1]
   Metrics     = Tuple[float, float, F1]     # loss, acc, [f1]
 
-mean = lambda x: sum(x) / len(x)
-mode = lambda x: np.argmax(np.bincount(x))
+mean   = lambda x: sum(x) / len(x)
+mode   = lambda x: np.argmax(np.bincount(x))
+argmax = lambda x: x.argmax([-1], False)    # [axis], keepdims
+to_tensor = lambda *xs: tuple(QTensor(x) for x in xs) if len(xs) > 1 else QTensor(xs[0])
 
 ''' utils '''
 

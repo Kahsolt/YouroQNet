@@ -104,7 +104,7 @@ def gen_dataloader(args, split:str, vocab:Vocab) -> Dataloader:
   shuffle = split == 'train'
   T, Y = load_dataset(split)
 
-  def iter_by_batch() -> Tuple[QTensor, QTensor]:
+  def iter_by_batch() -> Tuple[NDArray, NDArray]:
     nonlocal args, shuffle, T, Y, tokenizer, word2id
 
     N = len(Y)
@@ -133,12 +133,11 @@ def test(args, model:QModel, creterion, test_loader:Dataloader, logger:Logger) -
 
   model.eval()
   for X_np, Y_np in test_loader():
-    X = QTensor(X_np)
-    Y = QTensor(Y_np)
+    X, Y = to_tensor(X_np, Y_np)
   
     logits = model(X)
     l = creterion(Y, logits)
-    pred = logits.argmax([-1], False)   # axis, keepdims
+    pred = argmax(logits)
 
     Y_true.extend(   Y.to_numpy().tolist())
     Y_pred.extend(pred.to_numpy().tolist())
@@ -164,8 +163,7 @@ def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, tes
 
     model.train()
     for X_np, Y_np in train_loader():
-      X = QTensor(X_np)
-      Y = QTensor(Y_np)
+      X, Y = to_tensor(X_np, Y_np)
 
       optimizer.zero_grad()
       logits = model(X)
@@ -173,7 +171,7 @@ def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, tes
       l.backward()
       optimizer._step()
 
-      pred = logits.argmax([-1], False)   # axis, keepdims
+      pred = argmax(logits)
       ok  += (Y_np == pred.to_numpy().astype(np.int32)).sum()
       tot += len(Y_np) 
       loss += l.item()
