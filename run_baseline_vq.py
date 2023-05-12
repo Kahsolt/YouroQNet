@@ -71,6 +71,7 @@ class TextDNN(TextModel):
 
     self.fc1 = Linear(args.embed_dim, args.dim)
     self.act = ReLu()
+    self.drp = Dropout(0.35)
     self.fc2 = Linear(args.dim, args.n_class)
 
   def forward(self, x:QTensor):
@@ -80,6 +81,7 @@ class TextDNN(TextModel):
     o = self.act(o)
     if self.args.use_res:
       o = o + z
+    o = self.drp(o)
     o = self.fc2(o)     # [B, NC=4]
     return o
 
@@ -98,6 +100,7 @@ class TextCNN(TextModel):
       self.conv2 = Conv2D(args.dim//2, args.dim, (3, 3), (1, 1), 'same')
 
     self.act = ReLu()
+    self.drp = Dropout(0.35)
     self.fc  = Linear(args.dim, args.n_class)
 
   def forward(self, x:QTensor):
@@ -112,6 +115,7 @@ class TextCNN(TextModel):
       o = self.pool (o)           # [B, C=80, L=8]
       o = self.act  (o)
       o = self.agg  (o, -1)       # [B, D=80]
+      o = self.drp  (o)
       o = self.fc   (o)           # [B, NC=4]
 
     if args.type == '2d':
@@ -125,6 +129,7 @@ class TextCNN(TextModel):
       B, C, H, W = o.shape
       o = tensor.reshape(o, (B, C, H * W))
       o = self.agg  (o, -1)       # [B, D=80]
+      o = self.drp  (o)
       o = self.fc   (o)           # [B, NC=4]
 
     return o
@@ -136,6 +141,7 @@ class TextRNN(TextModel):
 
     self.rnn = globals()[args.type](args.embed_dim, args.dim, 1, bidirectional=args.bidir)
     self.act = ReLu()
+    self.drp = Dropout(0.35)
     self.fc  = Linear(args.dim * (1 + args.bidir), args.n_class)
 
   def forward(self, x:QTensor):
@@ -157,6 +163,7 @@ class TextRNN(TextModel):
     else:
       o = self.agg(o, 1)  # max or avg on dim-1
     o = self.act(o)
+    o = self.drp(o)
     o = self.fc (o)     # [B, NC]
     return o
 
