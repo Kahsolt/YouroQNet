@@ -253,7 +253,7 @@ def gen_dataloader(args, split:str, vocab:Vocab) -> Dataloader:
         if i + j >= N: break
         idx = indexes[i + j]
         T_batch.append(np.asarray([word2id.get(w, PAD_ID) for w in aligner(tokenizer(T[idx]))]))
-        Y_batch.append(Y[idx])
+        Y_batch.append(Y[idx])    # use integer label
 
       if len(T_batch) == args.batch_size:
         yield [np.stack(e, axis=0).astype(np.int32) for e in [T_batch, Y_batch]]
@@ -384,7 +384,7 @@ def go_train(args):
   args.param_cnt = sum([p.size for p in model.parameters() if p.requires_grad])
   
   optimizer = Adam(model.parameters(), args.lr)
-  creterion = CrossEntropyLoss()
+  creterion = CrossEntropyLoss()    # creterion accepts integer label as truth
 
   # info
   logger.info(f'hparams: {vars(args)}')

@@ -30,7 +30,7 @@ if 'pyvqnet & pyqpanda':
   from pyvqnet.qnn.qembed import Quantum_Embedding
   # optimizing
   from pyvqnet.qnn.measure import expval, ProbsMeasure, QuantumMeasure, DensityMatrixFromQstate, VN_Entropy, Mutal_Info, Hermitian_expval, MeasurePauliSum, VarMeasure, Purity
-  from pyvqnet.nn.loss import CategoricalCrossEntropy, BinaryCrossEntropy, SoftmaxCrossEntropy, CrossEntropyLoss
+  from pyvqnet.nn.loss import BinaryCrossEntropy, SoftmaxCrossEntropy, CategoricalCrossEntropy, CrossEntropyLoss, NLL_Loss, fidelityLoss
   from pyvqnet.optim import SGD, Adam, Rotosolve
   from pyvqnet.qnn.opt import SPSA, QNG
   # ckpt
@@ -45,7 +45,10 @@ from mk_vocab import make_tokenizer, load_vocab, truncate_vocab, Vocab, Tokenize
 
 
 def get_NaiveQNet() -> ModelConfig:
-  pass
+  n_qubit = 16
+  n_param = n_qubit * 2
+
+  return None, SoftmaxCrossEntropy, n_qubit, n_param
 
 def get_YouroQNet() -> ModelConfig:
   ''' 熔炉ネットと言うのは、虚仮威し全て裏技を繋ぐ '''
@@ -66,12 +69,12 @@ def get_YouroQNet() -> ModelConfig:
     breakpoint()
     return prob
 
-  return YouroQNet_qdrl, n_qubit, n_param
+  return YouroQNet_qdrl, BinaryCrossEntropy, n_qubit, n_param
 
 
-def get_model(args) -> QModel:
-  compute_circuit, n_qubit, n_param =  globals()[f'get_{args.model}QNet']()
-  return QuantumLayer(compute_circuit, n_param, 'cpu', n_qubit)
+def get_model_and_creterion(args) -> Tuple[QModel, Callable]:
+  compute_circuit, loss_cls, n_qubit, n_param =  globals()[f'get_{args.model}QNet']()
+  return QuantumLayer(compute_circuit, n_param, 'cpu', n_qubit), loss_cls()
 
 def get_vocab(args) -> Vocab:
   analyzer: str = args.analyzer
@@ -116,7 +119,7 @@ def gen_dataloader(args, split:str, vocab:Vocab) -> Dataloader:
         if i + j >= N: break
         idx = indexes[i + j]
         T_batch.append(np.asarray([word2id.get(w, PAD_ID) for w in aligner(tokenizer(T[idx]))]))
-        Y_batch.append(Y[idx])
+        Y_batch.append(np.eye(args.n_class)[Y[idx]])    # make onehot
 
       if len(T_batch) == args.batch_size:
         yield [np.stack(e, axis=0).astype(np.int32) for e in [T_batch, Y_batch]]
@@ -219,11 +222,10 @@ def go_train(args):
   valid_loader = gen_dataloader(args, 'valid', vocab)
 
   # model & optimizer & loss
-  model = get_model(args)
+  model, creterion = get_model_and_creterion(args)    # creterion accepts onehot label as truth
   args.param_cnt = sum([p.size for p in model.parameters() if p.requires_grad])
   
-  optimizer = SGD(model.parameters(), lr=0.5)
-  creterion = BinaryCrossEntropy()
+  optimizer = SGD(model.parameters(), lr=args.lr, momentum=0.9)
 
   # info
   logger.info(f'hparams: {vars(args)}')
@@ -266,7 +268,7 @@ def go_infer(args, texts:List[str]) -> List[int]:
   assert out_dp.exists(), 'you must train this model before you can infer from :('
   
   # model
-  model = get_model(args)
+  model, _ = get_model_and_creterion(args)
   load_ckpt(model, out_dp / 'model.pth')
 
   # symbols (codebook)

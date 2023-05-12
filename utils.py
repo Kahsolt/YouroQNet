@@ -47,7 +47,7 @@ if 'typing':
   Qubits      = Union[List[Qubit], QVec]
   Cbit        = ClassicalCondition
   Cbits       = List[Cbit]
-  ModelConfig = Tuple[Callable, int, int]   # compute_circuit(), n_qubit, n_param
+  ModelConfig = Tuple[Callable, Any, int, int]   # compute_circuit(), creteron, n_qubit, n_param
   Dataloader  = Generator[Tuple[QTensor, QTensor], None, None]
   Dataset     = Tuple[List[str], NDArray]   # text, label
   Datasets    = Tuple[Dataset, ...]
