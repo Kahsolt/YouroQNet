@@ -2,8 +2,6 @@
 # Author: Armit
 # Create Time: 2023/05/10 
 
-from typing import Union
-
 from run_baseline_sk import *
 
 METHODS = {

@@ -7,7 +7,6 @@ import json
 from pathlib import Path
 from argparse import ArgumentParser
 from functools import partial
-from typing import Dict, Tuple
 import warnings ; warnings.simplefilter("ignore")
 
 if 'pyvqnet':
@@ -342,7 +341,7 @@ def train(args, model:Module, optimizer, creterion, train_loader:Dataloader, tes
   return losses, accs, test_losses, test_accs
 
 
-def go(args):
+def go_train(args):
   # configs
   args.expname = f'{args.analyzer}_{args.model}'
   out_dp: Path = LOG_PATH / args.analyzer / args.model
@@ -417,9 +416,9 @@ def go(args):
     json.dump(result, fh, indent=2, ensure_ascii=False)
 
 
-def make_cmp_eval():
+def go_eval(args):
   # just ignored beacuse not good results :(
-  return
+  raise NotImplementedError
 
   MODEL_PREFXIES = [ 'dnn', 'cnn', 'rnn' ]
   for analyzer in ANALYZERS:
@@ -432,8 +431,6 @@ def make_cmp_eval():
 
       with open(dp / 'result.json', 'w', encoding='utf-8') as fh:
         result = json.load(fh)['scores']
-
-      raise NotImplemented
 
 
 if __name__ == '__main__':
@@ -451,7 +448,7 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   if args.eval:
-    make_cmp_eval()
+    go_eval()
     exit(0)
 
   if args.model.startswith('cnn'):
@@ -459,4 +456,4 @@ if __name__ == '__main__':
     print('Still do not know why, might be bugs of pyvqnet, so just ignore it :(')
     exit(0)
 
-  go(args)
+  go_train(args)

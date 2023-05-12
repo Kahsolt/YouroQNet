@@ -9,18 +9,24 @@ from time import time
 import logging
 from logging import Logger
 from traceback import print_exc
-from typing import List, Tuple, Generator
+from typing import *
 
 import pandas as pd
 import numpy as np
 
-from pyvqnet.tensor import QTensor
-from pyvqnet.nn import Module
-from pyvqnet.utils.storage import load_parameters, save_parameters
+if 'pyvqnet & pyqpanda':
+  from pyqpanda import CPUQVM, Qubit, QVec, ClassicalCondition
+  from pyvqnet.tensor import QTensor
+  from pyvqnet.nn import Module
+  from pyvqnet.utils.storage import load_parameters, save_parameters
 
-RANDSEED  = 114514
+IS_DEBUG = sys.platform == 'win32'
 
-DATA_PATH = Path('data') if sys.platform == 'win32' else Path('.')
+N_CLASS  = 4
+RANDSEED = 114514
+COULMNS  = ['label', 'text']
+SPLITS   = ['train', 'test', 'valid'] if IS_DEBUG else ['train', 'test']
+DATA_PATH = Path('data') if IS_DEBUG else Path('.')
 LOG_PATH  = Path('log') ; LOG_PATH.mkdir(exist_ok=True)
 
 ANALYZERS = [
@@ -33,11 +39,23 @@ ANALYZERS = [
   'kgram+',
 ]
 
-Dataloader = Generator[Tuple[QTensor, QTensor], None, None]
-Dataset    = Tuple[List[str], np.ndarray]
-Datasets   = Tuple[Dataset, ...]
-Score      = Tuple[float, float, float, np.ndarray]
-Scores     = Tuple[List[float], List[float], List[float], List[np.ndarray]]   # multi splits
+if 'typing':
+  NDArray     = np.ndarray
+  QVM         = CPUQVM
+  Qubits      = Union[List[Qubit], QVec]
+  Cbit        = ClassicalCondition
+  Cbits       = List[Cbit]
+  ModelConfig = Tuple[Callable, int, int]   # compute_circuit(), n_qubit, n_param
+  Dataloader  = Generator[Tuple[QTensor, QTensor], None, None]
+  Dataset     = Tuple[List[str], NDArray]   # text, label
+  Datasets    = Tuple[Dataset, ...]
+  Score       = Tuple[float, float, float, NDArray]   # prec, recall, f1, cmat
+  Scores      = Tuple[List[float], List[float], List[float], List[NDArray]]   # multi splits
+  F1          = Tuple[float, ...]           # [f1]
+  AccF1       = Tuple[float, F1]            # acc, [f1]
+  Metrics     = Tuple[float, float, F1]     # loss, acc, [f1]
+
+mean = lambda x: sum(x) / len(x)
 
 ''' utils '''
 
@@ -70,12 +88,7 @@ def load_ckpt(model:Module, fp:str):
 def save_ckpt(model:Module, fp:str):
   save_parameters(model.state_dict(), fp)
 
-''' dataset & text'''
-
-if 'consts for dataset':
-  N_CLASS = 4
-  COULMNS = ['label', 'text']
-  SPLITS  = ['train', 'test', 'valid'] if sys.platform == 'win32' else ['train', 'test']
+''' dataset '''
 
 def load_dataset(split:str, normalize:bool=True, fp:Path=None, seed:int=RANDSEED) -> Dataset:
   ''' `fp` overrides the default filepath '''
@@ -94,6 +107,28 @@ def load_dataset(split:str, normalize:bool=True, fp:Path=None, seed:int=RANDSEED
   T = df[c_txt].to_numpy().tolist()
   if normalize: T = clean_text(T)
   return T, Y
+
+''' metric '''
+
+def f1_score(result:NDArray, target:NDArray, label:int) -> float:
+  ''' copied from the judge code '''
+
+  solution_label = (result == label).astype(int)
+  target_label   = (target == label).astype(int)
+  tp = np.sum(solution_label * target_label)
+  fp = np.sum(solution_label * (1 - target_label))
+  fn = np.sum((1 - solution_label) * target_label)
+
+  p = tp / (tp + fp + 1e-7)
+  f = tp / (tp + fn + 1e-7)
+
+  return np.round(2 * (p * f) / (p + f), 3)
+
+def get_acc_f1(pred:NDArray, target:NDArray, n_class:int=N_CLASS) -> AccF1:
+  assert pred.dtype == target.dtype == np.int32, 'label should be inetegers'
+  return (pred == target).mean(), [f1_score(pred, target, label) for label in range(n_class)]
+
+''' text '''
 
 if 'consts for text':
   from re import compile as Regex

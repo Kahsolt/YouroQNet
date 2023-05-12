@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from answer import question1
+from utils import DATA_PATH
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
@@ -43,7 +44,7 @@ def get_target_label(fp:str) -> np.ndarray:
 if __name__ == "__main__":
   for split in ['train', 'test', 'valid']:
     print(f'[{split}]')
-    fp = f'data/{split}.csv'
+    fp = DATA_PATH / f'{split}.csv'
     target = get_target_label(fp)
     solution = question1(fp)
     print('final score:', score(target, solution))

@@ -6,7 +6,6 @@ import pickle as pkl
 from pathlib import Path
 from argparse import ArgumentParser
 from traceback import print_exc
-from typing import Tuple
 import warnings ; warnings.simplefilter("ignore")
 
 import jieba
@@ -102,7 +101,7 @@ def run_tfidf(analyzer:str) -> Datasets:
   ''' This should be more like syntaxical feature '''
   assert analyzer in ['char', 'word'] or analyzer.endswith('gram')
 
-  def process_data(split:str, tfidfvec:TfidfVectorizer) -> Tuple[np.ndarray, np.ndarray]:
+  def process_data(split:str, tfidfvec:TfidfVectorizer) -> Tuple[NDArray, NDArray]:
     T, Y = load_dataset(split)
     tfidf = tfidfvec.fit_transform(T) if split == 'train' else tfidfvec.transform(T)
     X = tfidf.todense()     # [N=1600, K=3386]
@@ -251,7 +250,33 @@ def run_model(name, model, datasets:Datasets, logger:Logger) -> Scores:
   return precs, recalls, f1s, cmats
 
 
-def make_cmp_eval():
+def go_train(args):
+  out_dp: Path = LOG_PATH / args.analyzer / args.feature
+  out_dp.mkdir(exist_ok=True, parents=True)
+
+  datasets: Datasets = globals()[f'run_{args.feature}'](args.analyzer)
+  run_visualize(datasets, f'{args.feature}-{args.analyzer}', out_dp)
+
+  logger = get_logger(out_dp / 'run.log', mode='w')
+  result = { }
+  for name, model_fn in MODELS.items():
+    print(f'<< running {name}...')
+    try:
+      logger.info(f'exp: {args.feature}-{args.analyzer}-{name}')
+      precs, recalls, f1s, cmats = run_model(name, model_fn(), datasets, logger)
+      result[name] = {
+        'prec':   precs,
+        'recall': recalls,
+        'f1':     f1s,
+        'cmat':   cmats,
+      }
+    except: print_exc()
+
+  with open(out_dp / 'result.pkl', 'wb') as fh:
+    pkl.dump(result, fh)
+
+
+def go_eval(args):
   for feature in FEATURES:
     for analyzer in ANALYZERS:
       out_dp = LOG_PATH / analyzer / feature
@@ -301,29 +326,7 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   if args.eval:
-    make_cmp_eval()
+    go_eval()
     exit(0)
 
-  out_dp: Path = LOG_PATH / args.analyzer / args.feature
-  out_dp.mkdir(exist_ok=True, parents=True)
-
-  datasets: Datasets = globals()[f'run_{args.feature}'](args.analyzer)
-  run_visualize(datasets, f'{args.feature}-{args.analyzer}', out_dp)
-
-  logger = get_logger(out_dp / 'run.log', mode='w')
-  result = { }
-  for name, model_fn in MODELS.items():
-    print(f'<< running {name}...')
-    try:
-      logger.info(f'exp: {args.feature}-{args.analyzer}-{name}')
-      precs, recalls, f1s, cmats = run_model(name, model_fn(), datasets, logger)
-      result[name] = {
-        'prec':   precs,
-        'recall': recalls,
-        'f1':     f1s,
-        'cmat':   cmats,
-      }
-    except: print_exc()
-
-  with open(out_dp / 'result.pkl', 'wb') as fh:
-    pkl.dump(result, fh)
+  go_train()

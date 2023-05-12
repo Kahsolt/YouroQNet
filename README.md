@@ -48,16 +48,16 @@ A subset from [simplifyweibo_4_moods](https://github.com/SophonPlus/ChineseNlpCo
   - [x] pca & cluster
   - [ ] data relabel (?)
 - [ ] data filtering
-  - [ ] punctuation sanitize
+  - [x] punctuation sanitize
   - [ ] stop words removal
-  - [ ] too short / long sententce
+  - [x] too short / long sententce
 - [x] feature extraction
   - [x] tf-idf (syntaxical)
   - [x] fasttext embedding (sematical)
-  - [ ] adaptive tokenizer
+  - [x] adaptive tokenizer
 - [x] baseline models
   - [x] sklearn
-  - [ ] vqnet-classical
+  - [x] vqnet-classical
 - [x] quantum models
   - [ ] quantum embedding
   - [ ] model route on different length

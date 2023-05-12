@@ -3,3 +3,4 @@ pyqpanda==3.7.16
 pyvqnet==2.0.6
 pandas
 numpy==1.23.5
+matplotlib
