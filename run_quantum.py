@@ -10,7 +10,11 @@ import warnings ; warnings.simplefilter("ignore")
 if 'pyvqnet & pyqpanda':
   # qvm & gates
   from pyqpanda import CPUQVM
-  from pyqpanda import *
+  from pyqpanda import QCircuit, QProg, QGate, QOracle
+  from pyqpanda import X, Y, Z, I, H, S, T
+  from pyqpanda import CNOT, CZ, SWAP, iSWAP, SqiSWAP, Toffoli
+  from pyqpanda import RX, RY, RZ, P, U1, U2, U3, U4
+  from pyqpanda import CR, CU, RXX, RYY, RZZ, RZX
   # tensor
   from pyvqnet import tensor
   from pyvqnet.tensor import QTensor
@@ -98,7 +102,7 @@ def get_word2id(args, symbols:List[str]) -> Vocab:
   return word2id
 
 def gen_dataloader(args, split:str, vocab:Vocab) -> Dataloader:
-  word2id = get_word2id(args, vocab.keys())
+  word2id = get_word2id(args, list(vocab.keys()))
   tokenizer = make_tokenizer(vocab) if 'gram' in args.analyzer else list
 
   shuffle = split == 'train'
@@ -230,6 +234,7 @@ def go_train(args):
 
   # model & optimizer & loss
   model, creterion = get_model_and_creterion(args)    # creterion accepts onehot label as truth
+  breakpoint()
   args.param_cnt = sum([p.size for p in model.parameters() if p.requires_grad])
   
   optimizer = SGD(model.parameters(), lr=args.lr, momentum=0.9)
@@ -280,7 +285,7 @@ def go_infer(args, texts:List[str], ret_callable:bool=False) -> Union[Votes, Inf
 
   # symbols (codebook)
   vocab = get_vocab(args)
-  word2id = get_word2id(args, vocab.keys())
+  word2id = get_word2id(args, list(vocab.keys()))
   tokenizer = make_tokenizer(vocab) if 'gram' in args.analyzer else list
   args.n_vocab = len(vocab) + 1  # <PAD>
   args.n_class = N_CLASS
