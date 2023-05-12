@@ -56,6 +56,8 @@ if 'typing':
   F1          = Tuple[float, ...]           # [f1]
   AccF1       = Tuple[float, F1]            # acc, [f1]
   Metrics     = Tuple[float, float, F1]     # loss, acc, [f1]
+  Votes       = List[int]
+  Inferer     = Callable[[str], Votes]
 
 mean   = lambda x: sum(x) / len(x)
 mode   = lambda x: np.argmax(np.bincount(x))

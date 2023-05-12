@@ -68,7 +68,8 @@ A subset from [simplifyweibo_4_moods](https://github.com/SophonPlus/ChineseNlpCo
 
 ### Core idea & Contributions
 
-- adaptive k-gram tokenizer (see [mk_vocab.py](mk_vocab.py), test with [vis_tokenizer.py](vis_tokenizer.py))
+- adaptive k-gram tokenizer (see [mk_vocab.py](mk_vocab.py), interactivate demo [vis_tokenizer.py](vis_tokenizer.py))
+- YouroQNet for text clf (see [run_quantum.py](run_quantum.py), interactivate demo [vis_quantum.py](vis_quantum.py))
 
 
 ### references

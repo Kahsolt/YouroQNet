@@ -193,13 +193,22 @@ def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, tes
 
   return losses, accs, test_losses, test_accs
 
-def infer(args, model:QModel, sent:str, tokenizer:Tokenizer, word2id:Vocab) -> List[int]:
-  aligner = lambda x: align_words(x, args.length, args.pad)
-
+def infer(args, model:QModel, sent:str, tokenizer:Tokenizer, word2id:Vocab) -> Votes:
+  PAD_ID = word2id.get(args.pad, -1)
   toks = tokenizer(sent)
-  toks = aligner(toks)
+  if len(toks) < args.length:
+    toks = align_words(toks, args.length, args.pad)
 
-  return [random.randrange(args.n_class)]
+  ids = np.asarray([word2id.get(w, PAD_ID) for w in toks], dtype=np.int32)  # [L]
+  possible_sp = list(range(len(ids) - args.length + 1))
+  choose_sp = possible_sp if len(possible_sp) <= args.n_vote else random.sample(possible_sp, args.n_vote)
+  X_np = np.stack([ ids[sp:sp+args.length] for sp in choose_sp ], axis=0)   # [V, mL=16]
+
+  X = to_tensor(X_np)   # [V, mL]
+  logits = model(X)     # [V, NC]
+  pred = argmax(logits) # [V]
+  votes = pred.to_numpy().tolist()
+  return votes
 
 
 def go_train(args):
@@ -260,7 +269,7 @@ def go_train(args):
     json.dump(result, fh, indent=2, ensure_ascii=False)
 
 
-def go_infer(args, texts:List[str]) -> List[int]:
+def go_infer(args, texts:List[str], ret_callable:bool=False) -> Union[Votes, Inferer]:
   # configs
   out_dp: Path = LOG_PATH / args.analyzer / args.model
   assert out_dp.exists(), 'you must train this model before you can infer from :('
@@ -276,7 +285,11 @@ def go_infer(args, texts:List[str]) -> List[int]:
   args.n_vocab = len(vocab) + 1  # <PAD>
   args.n_class = N_CLASS
 
-  # pred
+  # make a inferer callable 
+  if ret_callable:
+    return lambda sent: infer(args, model, sent, tokenizer, word2id)
+
+  # pred directly
   preds = []
   n_ties = 0
   for sent in texts:
