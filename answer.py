@@ -14,7 +14,7 @@ from run_quantum import get_args, go_train, go_infer
 
 
 def get_args_best_config():
-  ''' yes your just tune everything manually... '''
+  ''' yes you just tune everything manually and fix the best... '''
 
   args = get_args()
   # preprocess
@@ -28,6 +28,8 @@ def get_args_best_config():
   args.batch_size = 32
   args.epochs     = 10
   args.lr         = 0.1
+  # infer
+  args.n_vote     = 5
   return args
 
 
@@ -55,7 +57,6 @@ def question1(fp: str) -> np.ndarray:
 
   # inference
   args = get_args_best_config()
-  args.batch_size = 24
   pred = go_infer(args, T)
 
   if 'dummy random':

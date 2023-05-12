@@ -4,7 +4,6 @@
 
 import json
 from argparse import ArgumentParser
-from functools import partial
 from traceback import print_exc
 import warnings ; warnings.simplefilter("ignore")
 
@@ -42,13 +41,15 @@ import matplotlib ; matplotlib.use('agg')
 import matplotlib.pyplot as plt
 
 from utils import *
-from mk_vocab import make_tokenizer, load_vocab, truncate_vocab, Vocab
+from mk_vocab import make_tokenizer, load_vocab, truncate_vocab, Vocab, Tokenizer
 
 
 def get_NaiveQNet() -> ModelConfig:
   pass
 
 def get_YouroQNet() -> ModelConfig:
+  ''' 熔炉ネットと言うのは、虚仮威し全て裏技を繋ぐ '''
+
   n_qubit = 16
   n_rep_data = 2
   n_param = n_qubit * 2
@@ -62,12 +63,13 @@ def get_YouroQNet() -> ModelConfig:
       prob = ProbsMeasure([0], prog, qvm, qv)
     else:
       prob = qvm.prob_run_list(prog, qv[0])
+    breakpoint()
     return prob
 
   return YouroQNet_qdrl, n_qubit, n_param
 
 
-def get_model(args) -> QuantumLayer:
+def get_model(args) -> QModel:
   compute_circuit, n_qubit, n_param =  globals()[f'get_{args.model}QNet']()
   return QuantumLayer(compute_circuit, n_param, 'cpu', n_qubit)
 
@@ -86,16 +88,14 @@ def get_vocab(args) -> Vocab:
     vocab = truncate_vocab(vocab, args.min_freq)
   return vocab
 
-def gen_dataloader(args, split:str, vocab:Vocab) -> Dataloader:
-  def make_mappings(symbols:List[str], pad:str=None) -> Tuple[Dict[str, int], Dict[int, str]]:
-    if pad is not None: syms = [pad] + symbols
-    syms.sort()
-    word2id = { v: i for i, v in enumerate(syms) }
-    id2word = { i: v for i, v in enumerate(syms) }
-    return word2id, id2word
+def get_word2id(args, symbols:List[str]) -> Vocab:
+  if args.pad is not None: syms = [args.pad] + symbols
+  syms.sort()
+  word2id = { v: i for i, v in enumerate(syms) }
+  return word2id
 
-  symbols = sorted(vocab.keys())
-  word2id, id2word = make_mappings(symbols, args.pad)
+def gen_dataloader(args, split:str, vocab:Vocab) -> Dataloader:
+  word2id = get_word2id(args, vocab.keys())
   tokenizer = make_tokenizer(vocab) if 'gram' in args.analyzer else list
 
   shuffle = split == 'train'
@@ -108,7 +108,7 @@ def gen_dataloader(args, split:str, vocab:Vocab) -> Dataloader:
     indexes = list(range(N))
     if shuffle: random.shuffle(indexes) 
     PAD_ID = word2id.get(args.pad, -1)
-    aligner = partial(align_text, args.length)
+    aligner = lambda x: align_words(x, args.length, args.pad)
 
     for i in range(0, N, args.batch_size):
       T_batch, Y_batch = [], []
@@ -124,7 +124,7 @@ def gen_dataloader(args, split:str, vocab:Vocab) -> Dataloader:
   return iter_by_batch    # return a DataLoader generator
 
 
-def test(args, model:QuantumLayer, creterion, test_loader:Dataloader, logger:Logger) -> Metrics:
+def test(args, model:QModel, creterion, test_loader:Dataloader, logger:Logger) -> Metrics:
   Y_true, Y_pred = [], []
   loss = 0.0
 
@@ -135,7 +135,7 @@ def test(args, model:QuantumLayer, creterion, test_loader:Dataloader, logger:Log
   
     logits = model(X)
     l = creterion(Y, logits)
-    pred = logits.argmax(-1, False)   # axis, keepdims
+    pred = logits.argmax([-1], False)   # axis, keepdims
 
     Y_true.extend(   Y.to_numpy().tolist())
     Y_pred.extend(pred.to_numpy().tolist())
@@ -150,7 +150,7 @@ def test(args, model:QuantumLayer, creterion, test_loader:Dataloader, logger:Log
   logger.info(f'>> score: {sum(f1) / len(f1)}')
   return loss / len(Y_true), acc, f1
 
-def train(args, model:QuantumLayer, optimizer, creterion, train_loader:Dataloader, test_loader:Dataloader, logger:Logger) -> List[List[float]]:
+def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, test_loader:Dataloader, logger:Logger) -> List[List[float]]:
   step = 0
 
   losses, accs = [], []
@@ -192,6 +192,14 @@ def train(args, model:QuantumLayer, optimizer, creterion, train_loader:Dataloade
 
   return losses, accs, test_losses, test_accs
 
+def infer(args, model:QModel, sent:str, tokenizer:Tokenizer, word2id:Vocab) -> List[int]:
+  aligner = lambda x: align_words(x, args.length, args.pad)
+
+  toks = tokenizer(sent)
+  toks = aligner(toks)
+
+  return [random.randrange(args.n_class)]
+
 
 def go_train(args):
   # configs
@@ -220,12 +228,6 @@ def go_train(args):
   # info
   logger.info(f'hparams: {vars(args)}')
 
-  B = args.batch_size
-  D = 8
-  X = tensor.ones([B, D])
-  y = model(X)
-  breakpoint()
-
   # train
   losses, accs, tlosses, taccs = train(args, model, optimizer, creterion, train_loader, test_loader, logger)
   plt.clf()
@@ -248,12 +250,11 @@ def go_train(args):
   result = { 'hparam': vars(args), 'scores': {} }
   for split in SPLITS:
     datat_loader = locals().get(f'{split}_loader')
-    precs, recalls, f1s, cmats = [e.tolist() for e in test(args, model, datat_loader, logger)]
+    loss, acc, f1 = test(args, model, datat_loader, logger)
     result['scores'][split] = {
-      'prec':   precs,
-      'recall': recalls,
-      'f1':     f1s,
-      'cmat':   cmats,
+      'loss': loss,
+      'acc':  acc,
+      'f1':   f1,
     }
   with open(out_dp / 'result.json', 'w', encoding='utf-8') as fh:
     json.dump(result, fh, indent=2, ensure_ascii=False)
@@ -262,16 +263,32 @@ def go_train(args):
 def go_infer(args, texts:List[str]) -> List[int]:
   # configs
   out_dp: Path = LOG_PATH / args.analyzer / args.model
-  assert out_dp.exists()
-
-  # symbols (codebook)
-  vocab = get_vocab(args)
-  args.n_vocab = len(vocab) + 1  # <PAD>
-  args.n_class = N_CLASS
+  assert out_dp.exists(), 'you must train this model before you can infer from :('
   
   # model
   model = get_model(args)
   load_ckpt(model, out_dp / 'model.pth')
+
+  # symbols (codebook)
+  vocab = get_vocab(args)
+  word2id = get_word2id(args, vocab.keys())
+  tokenizer = make_tokenizer(vocab) if 'gram' in args.analyzer else list
+  args.n_vocab = len(vocab) + 1  # <PAD>
+  args.n_class = N_CLASS
+
+  # pred
+  preds = []
+  n_ties = 0
+  for sent in texts:
+    votes = infer(args, model, sent, tokenizer, word2id)
+    final = mode(votes)
+    if votes.count(final) > 1:
+      print(f'warn: meets a tie {votes}')
+      n_ties += 1
+    preds.append(final)
+  if n_ties: print(f'n_ties: {n_ties}')
+  
+  return preds
 
 
 def go_eval(args):
@@ -279,16 +296,19 @@ def go_eval(args):
 
 
 def get_args():
+  MODELS = [name[len('get_'):-len('QNet')] for name in globals() if name.startswith('get_') and name.endswith('QNet')]
+
   parser = ArgumentParser()
   parser.add_argument('-L', '--analyzer',   default='kgram+', choices=ANALYZERS, help='tokenize level')
-  parser.add_argument('-M', '--model',      default='Youro',        help='model config string pattern')
+  parser.add_argument('-M', '--model',      default='Youro',  choices=MODELS,    help='model config string pattern')
   parser.add_argument('-N', '--length',     default=32,   type=int, help='model input length (in tokens)')
   parser.add_argument('-P', '--pad',        default='\x00',         help='model input pad')
   parser.add_argument('-D', '--embed_dim',  default=32,   type=int, help='model embed depth')
   parser.add_argument('-E', '--epochs',     default=10,   type=int)
   parser.add_argument('-B', '--batch_size', default=32,   type=int)
   parser.add_argument('--lr',               default=0.1,  type=float)
-  parser.add_argument('--min_freq',         default=5,    type=int, help='final vocab for embedding')
+  parser.add_argument('--min_freq',         default=5,    type=int, help='min_freq for final embedding vocab')
+  parser.add_argument('--n_vote',           default=5,    type=int, help='number of voters at inference time')
   parser.add_argument('--eval', action='store_true', help='compare result scores')
   return parser.parse_args()
 
