@@ -72,6 +72,42 @@ A subset from [simplifyweibo_4_moods](https://github.com/SophonPlus/ChineseNlpCo
 - YouroQNet for text clf (see [run_quantum.py](run_quantum.py), interactivate demo [vis_quantum.py](vis_quantum.py))
 
 
+### Project layout
+
+```python
+# meterials
+ref/                # thesis for dev
+repo/               # git repo for dev
+data/               # dataset
+log/                # outputs
+
+# contest related
+answer.py           # run script for preprocessing & training
+check.py            # run script for evalution
+
+# preprocessors
+mk_*.py
+mk_preprocess.cmd   # run script for mk_*.py
+
+# models
+run_baseline_*.py   # classical experiments
+run_baseline.cmd    # run script for run_baseline_*.py
+run_quantum.py      # quantum experiments
+run_quantum.cmd     # run script for run_quantum.py
+
+# misc
+vis_*.py            # intercative demos
+utils.py            # common utils
+
+# doc & lic
+README.md
+requirements_*.txt
+LICESE
+```
+
+ℹ For the contest, only these files are submitted: `answer.py`, `mk_vocab.py`, `run_quantum.py`, `utils.py`, `README.md`; it should be enough to run all quantum parts 😀
+
+
 ### references
 
 - text-clf survey:
