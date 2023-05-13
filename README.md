@@ -58,7 +58,7 @@ A subset from [simplifyweibo_4_moods](https://github.com/SophonPlus/ChineseNlpCo
 - [x] baseline models
   - [x] sklearn
   - [x] vqnet-classical
-- [x] quantum models
+- [ ] quantum models
   - [ ] quantum embedding
   - [ ] model route on different length
   - [ ] multi to binary clf

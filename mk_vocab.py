@@ -11,7 +11,7 @@ from argparse import ArgumentParser
 from collections import defaultdict, Counter, OrderedDict
 from typing import Callable, Dict, Union, Tuple, List, Optional
 
-from utils import LOG_PATH, load_dataset, timer
+from utils import LOG_PATH, load_dataset, timer, is_zh_word
 
 ''' vocab '''
 
@@ -46,12 +46,17 @@ def reverse_vocab(voc:Vocab) -> Vocab:
   return {v[::-1]: c for v, c in voc.items()}
 
 def truncate_vocab(voc:Vocab, min_freq:int=3) -> Vocab:
-  return {v: c for v, c in voc.items() if c >= min_freq}
-  
+  voc_trunc = {v: c for v, c in voc.items() if c >= min_freq}
+  print(f'truncate vocab: {len(voc)} => {len(voc_trunc)}')
+  return voc_trunc
+
 def vocab_to_vocabp(voc:Vocab) -> VocabP:
   cnt = sum(voc.values())
   for v in voc: voc[v] /= cnt
   return voc
+
+def filter_vocab(voc:Vocab, predicate:Callable[[str], bool]):
+  return {v: c for v, c in voc.items() if predicate(v)}
 
 ''' ngram '''
 
@@ -63,6 +68,7 @@ def make_ngram(n:int=2, line_parser:Callable=list):
     for i in range(len(chars)-n):
       gram = ''.join(chars[i:i+n])
       voc[gram] += 1
+  voc = filter_vocab(voc, is_zh_word)
 
   out_dp = LOG_PATH / f'{n}gram'
   out_dp.mkdir(exist_ok=True, parents=True)
@@ -80,7 +86,6 @@ def make_char(line_parser:Callable=list):
   out_dp = LOG_PATH / 'char'
   out_dp.mkdir(exist_ok=True, parents=True)
   dump_vocab(voc, out_dp / 'vocab.txt', sort=True)
-
 
 ''' kgram '''
 
@@ -211,7 +216,7 @@ def make_tokenizer(fp_or_vocab:Union[str, Vocab, VocabP]=None, bidrectional:bool
     return partial(_tokenize, trie)
 
 @timer
-def make_kgram(vocabs:List[Vocab], min_freq:int=3, n_beam:int=4):
+def make_kgram(vocabs:List[Vocab], min_freq:int=3, n_beam:int=3):
   # reverse list & turn freq to prob & merge all vocabs
   for i, voc in enumerate(vocabs):
     vocabs[i] = vocab_to_vocabp(truncate_vocab(voc, min_freq))

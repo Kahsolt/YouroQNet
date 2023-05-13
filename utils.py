@@ -41,19 +41,21 @@ ANALYZERS = [
 ]
 
 if 'typing':
-  NDArray     = np.ndarray
   QVM         = CPUQVM
   QModel      = QuantumLayer
+  QModelInit  = Tuple[Callable, Any, int, int]   # compute_circuit(), creteron_cls, n_qubit, n_param
   Qubits      = Union[List[Qubit], QVec]
   Cbit        = ClassicalCondition
   Cbits       = List[Cbit]
-  ModelConfig = Tuple[Callable, Any, int, int]   # compute_circuit(), creteron, n_qubit, n_param
+  Probs       = List[float]
+
+  NDArray     = np.ndarray
   Dataloader  = Generator[Tuple[NDArray, NDArray], None, None]
   Dataset     = Tuple[List[str], NDArray]   # text, label
   Datasets    = Tuple[Dataset, ...]
   Score       = Tuple[float, float, float, NDArray]   # prec, recall, f1, cmat
   Scores      = Tuple[List[float], List[float], List[float], List[NDArray]]   # multi splits
-  F1          = Tuple[float, ...]           # [f1]
+  F1          = List[float]                 # [f1]
   AccF1       = Tuple[float, F1]            # acc, [f1]
   Metrics     = Tuple[float, float, F1]     # loss, acc, [f1]
   Votes       = List[int]
@@ -163,6 +165,10 @@ if 'consts for text':
   # TODO: hard-coded
   STOP_WORDS_CHAR = ['，', ' ', '的', '。', '.', '！', '我', '了', '是', '不', '一']
   STOP_WORDS_WORD = ['，', ' ', '的', '。', '！', '了', '我']
+
+  def is_zh_word(word:str) -> bool:
+    rng = range(*ZH_CP)
+    return all([ord(ch) in rng for ch in list(word)])
 
   def wchar_to_char(line:str) -> str:
     # ord('！') - ord('!') == 65248
