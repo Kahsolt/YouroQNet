@@ -3,6 +3,7 @@
 # Create Time: 2023/05/09 
 
 import json
+from pprint import pformat
 from argparse import ArgumentParser
 from traceback import print_exc
 import warnings ; warnings.simplefilter("ignore")
@@ -10,11 +11,31 @@ import warnings ; warnings.simplefilter("ignore")
 if 'pyvqnet & pyqpanda':
   # qvm & gates
   from pyqpanda import CPUQVM
+  from pyqpanda import draw_qprog, draw_qprog_text
   from pyqpanda import QCircuit, QProg, QGate, QOracle
+  from pyqpanda import BARRIER
   from pyqpanda import X, Y, Z, I, H, S, T
   from pyqpanda import CNOT, CZ, SWAP, iSWAP, SqiSWAP, Toffoli
   from pyqpanda import RX, RY, RZ, P, U1, U2, U3, U4
   from pyqpanda import CR, CU, RXX, RYY, RZZ, RZX
+  S_GATES  = [X, Y, Z, I, H, S, T]
+  D_GATES  = [CNOT, CZ, SWAP, iSWAP, SqiSWAP]
+  T_GATES  = [Toffoli]
+  GATES    = S_GATES + D_GATES + T_GATES
+  S_PGATES = [RX, RY, RZ, P, U1, U2, U3, U4]
+  D_PGATES = [CR, CU, RXX, RYY, RZZ, RZX]
+  PGATES   = S_PGATES + D_PGATES 
+  def get_gate_param(gate:QGate) -> int:
+    ''' get the gate param count '''
+    if gate in GATES: return 0
+    if gate in [RX, RY, RZ, P, U1, CR, RXX, RYY, RZZ, RZX]: return 1
+    if gate in [U2]: return 2
+    if gate in [U3]: return 3
+    if gate in [U4, CU]: return 4
+    raise ValueError(gate)
+  def is_gate_ctrl(gate:QGate) -> bool:
+    ''' is the gate controllable '''
+    return gate in D_GATES + T_GATES + D_PGATES
   # tensor
   from pyvqnet import tensor
   from pyvqnet.tensor import QTensor
@@ -47,37 +68,190 @@ import matplotlib.pyplot as plt
 from utils import *
 from mk_vocab import make_tokenizer, load_vocab, truncate_vocab, Vocab, Tokenizer
 
+class LogOnce:
+  export_circuit = True
 
-def get_NaiveQNet() -> ModelConfig:
-  n_qubit = 16
-  n_param = n_qubit * 2
 
-  return None, SoftmaxCrossEntropy, n_qubit, n_param
+def compute_circuit(cq:QCircuit, qv:Qubits, qvm:QVM, mbit:int=2) -> Probs:
+  ''' set mbit to measure on the first m-qubits '''
 
-def get_YouroQNet() -> ModelConfig:
-  ''' 熔炉ネットと言うのは、虚仮威し全て裏技を繋ぐ '''
+  prog = QProg() << cq
+  if 'use_qmeasure':
+    prob = ProbsMeasure(list(range(mbit)), prog, qvm, qv)
+  else:
+    prob = qvm.prob_run_list(prog, qv[:mbit])
 
-  n_qubit = 16
-  n_rep_data = 2
-  n_param = n_qubit * 2
+  if not 'expval':
+    print('rlt:', [expval(qvm, prog, {f"Z{i}": 1}, qv) for i in range(len(qv))])
+
+  if LogOnce.export_circuit:
+    LogOnce.export_circuit = False
+    try: draw_qprog(prog, output='pic', filename=str(TMP_PATH/'circuit.png'))
+    except: pass
+    draw_qprog_text(prog, output_file=str(TMP_PATH/'circuit.txt'))
+
+  return prob
+
+def get_NaiveQNet(args) -> QModelInit:
+  ''' naive qdrl for simple binary clf '''
+
+  # TODO: wtf make a qunatum baseline
+  raise NotImplementedError
+
+def get_YouroQNet(args) -> QModelInit:
+  ''' 熔炉ネットと言うのは、虚仮威し全て裏技を繋ぐもん '''
+
+  def StrongEntangleCircuitTemplate(qv:Qubits, param:NDArray, rots:List[QGate]=[RY, RZ], entgl:QGate=CNOT) -> QCircuit:
+    ''' rotate each qubit in `qv` by `rots` respectively, then entangle them with `entgl` cyclically '''
+    
+    # sanity check
+    assert all([rot in S_PGATES for rot in rots]), 'rot must be a parameterized single-qubit gate'
+    #assert entgl in D_GATES + D_PGATES, 'engtl must be a double-qubit gate'
+    assert entgl is CNOT, 'engtl only support CNOT so far'
+    nq = len(qv)
+    param = param.reshape(nq, len(rots))
+
+    qc = QCircuit()
+    # rotations
+    for i in range(nq):
+      for j, rot in enumerate(rots):
+        qc << rot(qv[i], param[i][j])
+    # entangles
+    for i in range(nq-1):
+      qc << entgl(qv[i], qv[i + 1])
+    if nq >= 3:
+      qc << entgl(qv[i], qv[0])   # back loop
+    return qc
+
+  def ControlMultiCircuitTemplate(q:Qubit, qv:Qubits, params:NDArray, entgl:QGate=RY) -> QCircuit:
+    ''' entangle the control qubit `q` over each target qubit in `qv` respectively '''
+    
+    # sanity check
+    #assert entgl in D_GATES + D_PGATES, 'engtl must be a double-qubit gate'
+    assert entgl is RY, 'engtl only support RY so far'
+    nq = len(qv)
+
+    # controls
+    qc = QCircuit()
+    for i in range(nq):
+      qc << RY(qv[i], params[i]).control(q)
+    return qc
+
+  if 'hparams':
+    # qubits: |p> for context, |q> for data buffer
+    n_qubit_p = int(np.ceil(np.log2(args.n_class)))
+    n_qubit_q = args.length
+    n_qubit   = n_qubit_p + n_qubit_q
+
+    # circuit
+    n_repeat  = args.repeat
+    SEC_rots  = [RY, RZ]    # can tune this
+    SEC_entgl = CNOT        # NOTE: fixed for the moment
+    CMC_entgl = RY          # CRY, NOTE: fixed for the moment
+    if 'render circuit templates':
+      StrongEntangleCircuit = lambda *args, **kwargs: StrongEntangleCircuitTemplate(*args, **kwargs, rots=SEC_rots, entgl=SEC_entgl)
+      ControlMultiCircuit   = lambda *args, **kwargs: ControlMultiCircuitTemplate  (*args, **kwargs,                entgl=CMC_entgl)
+    
+    # params: theta for embed, psi for ansatz
+    n_param_SEC = sum(get_gate_param(g) for g in SEC_rots + [SEC_entgl])
+    n_param_CMC = get_gate_param(CMC_entgl)
+    n_param_t_parts = [
+      args.n_vocab * n_repeat * n_param_SEC,      # embed
+    ]
+    n_param_p_parts = [
+      n_qubit_p             * (n_repeat + 1) * n_param_SEC,   # tranx
+      n_qubit_q * n_qubit_p *  n_repeat      * n_param_CMC,   # write
+      n_qubit_p * n_qubit_q *  n_repeat      * n_param_CMC,   # read
+    ]
+    n_param_t = sum(n_param_t_parts)
+    n_param_p = sum(n_param_p_parts)
+    n_param   = n_param_t + n_param_p
+
+    if 'add hparams to args':
+      args.n_qubit_p   = n_qubit_p
+      args.n_qubit_q   = n_qubit_q
+      args.n_qubit     = n_qubit
+      args.n_repeat    = n_repeat
+      args.n_param_SEC = n_param_SEC
+      args.n_param_CMC = n_param_CMC
+      args.n_param_t   = n_param_t
+      args.n_param_p   = n_param_p
+      args.n_param     = n_param
 
   def YouroQNet_qdrl(data:NDArray, param:NDArray, qv:Qubits, cv:Cbits, qvm:QVM):
-    def build_circuit() -> QCircuit:
-      pass
+    def embed_lookup(embed:NDArray, data:NDArray) -> NDArray:
+      ids = data.astype(np.int32)               # [L], one sample
+      embed = embed.reshape(args.n_vocab, -1)   # [K, D=n_repeat*n_gate_param], whole embeding table
+      theta = embed[ids]                        # sentence related embeddings
+      theta_n = np.arctan(theta)                # NOTE: assure angle range in [-pi/2, pi/2]
+      return theta_n
 
-    prog = QProg() << build_circuit()
-    if 'use_qmeasure':
-      prob = ProbsMeasure([0], prog, qvm, qv)
-    else:
-      prob = qvm.prob_run_list(prog, qv[0])
-    breakpoint()
-    return prob
+    def build_buf_load(theta:NDArray) -> QCircuit:
+      nonlocal buf
+      return StrongEntangleCircuit(buf, theta)
+    
+    def build_ctx_tranx(psi:NDArray) -> QCircuit:
+      nonlocal ctx
+      return StrongEntangleCircuit(ctx, psi)
+
+    def build_ctx_write(psi:NDArray) -> QCircuit:
+      nonlocal ctx, buf
+      nq = len(ctx)
+      psi = psi.reshape(nq, -1)
+      qc = QCircuit()
+      for i in range(nq):
+        qc << ControlMultiCircuit(ctx[i], buf, psi[i])
+      return qc
+
+    def build_ctx_read(psi:NDArray) -> QCircuit:
+      nonlocal ctx, buf
+      nq = len(buf)
+      psi = psi.reshape(nq, -1)
+      qc = QCircuit()
+      for i in range(nq):
+        qc << ControlMultiCircuit(buf[i], ctx, psi[i])
+      return qc
+
+    def build_circuit(theta:NDArray, psi:NDArray) -> QCircuit:
+      # split psi
+      cp1, cp2, _ = np.cumsum(n_param_p_parts)
+      psi_T = psi[   :cp1] ; psi_T = psi_T.reshape(n_repeat + 1, -1)  # [n_repeat+1=5, 4]
+      psi_W = psi[cp1:cp2] ; psi_W = psi_W.reshape(n_repeat,     -1)  # [n_repeat=4, 32]
+      psi_R = psi[cp2:]    ; psi_R = psi_R.reshape(n_repeat,     -1)  # [n_repeat=4, 32]
+      # rearange theta
+      theta = theta.reshape(len(buf), n_repeat, -1)   # [L=16, n_repeat=4, n_gate_param=2]
+
+      # build circuit
+      qc = QCircuit()
+      #qc << H(qv)
+      # NOTE: to keep code syntacical aligned, use the last portion for init
+      qc << build_ctx_tranx(psi_T[-1, :]) \
+         << BARRIER(qv)
+      for i in range(n_repeat):
+        qc << build_buf_load (theta[:, i, :]) \
+           << BARRIER(qv) \
+           << build_ctx_write(psi_W[i, :]) \
+           << BARRIER(qv) \
+           << build_ctx_tranx(psi_T[i, :]) \
+           << BARRIER(qv) \
+           << build_ctx_read (psi_R[i, :]) \
+           << BARRIER(qv)
+      return qc
+
+    # split qubits
+    ctx: Qubits = qv[:n_qubit_p][::-1]  # |p>, current context
+    buf: Qubits = qv[n_qubit_p:]        # |q>, placeholder for input sequence
+    # split param
+    embed = param[:n_param_t]           # whole embedding table
+    theta = embed_lookup(embed, data)   # sentence related entries
+    psi   = param[n_param_t:]           # ansatz params
+    return compute_circuit(build_circuit(theta, psi), qv, qvm, n_qubit_p)
 
   return YouroQNet_qdrl, BinaryCrossEntropy, n_qubit, n_param
 
 
 def get_model_and_creterion(args) -> Tuple[QModel, Callable]:
-  compute_circuit, loss_cls, n_qubit, n_param =  globals()[f'get_{args.model}QNet']()
+  compute_circuit, loss_cls, n_qubit, n_param =  globals()[f'get_{args.model}QNet'](args)
   return QuantumLayer(compute_circuit, n_param, 'cpu', n_qubit), loss_cls()
 
 def get_vocab(args) -> Vocab:
@@ -136,14 +310,15 @@ def test(args, model:QModel, creterion, test_loader:Dataloader, logger:Logger) -
   loss = 0.0
 
   model.eval()
-  for X_np, Y_np in test_loader():
+  for i, (X_np, Y_np) in enumerate(test_loader()):
     X, Y = to_tensor(X_np, Y_np)
+    if i >= 32: break
   
     logits = model(X)
     l = creterion(Y, logits)
     pred = argmax(logits)
 
-    Y_true.extend(   Y.to_numpy().tolist())
+    Y_true.extend(   Y.to_numpy().argmax(-1).tolist())
     Y_pred.extend(pred.to_numpy().tolist())
     loss += l.item()
 
@@ -151,9 +326,9 @@ def test(args, model:QModel, creterion, test_loader:Dataloader, logger:Logger) -
   Y_pred = np.asarray(Y_pred, dtype=np.int32)
 
   acc, f1 = get_acc_f1(Y_pred, Y_true, args.n_class)
-  logger.info(f'>> acc: {acc}')
+  logger.info(f'>> acc: {acc:.3%}')
   logger.info(f'>> f1: {f1}')
-  logger.info(f'>> score: {sum(f1) / len(f1)}')
+  logger.info(f'>> score: {sum(f1) / len(f1) * 60}')
   return loss / len(Y_true), acc, f1
 
 def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, test_loader:Dataloader, logger:Logger) -> List[List[float]]:
@@ -176,13 +351,13 @@ def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, tes
       optimizer._step()
 
       pred = argmax(logits)
-      ok  += (Y_np == pred.to_numpy().astype(np.int32)).sum()
+      ok  += (Y_np.argmax(-1) == pred.to_numpy().astype(np.int32)).sum()
       tot += len(Y_np) 
       loss += l.item()
 
       step += 1
 
-      if step % 50 == 0:
+      if step % 10 == 0:
         losses.append(loss / tot)
         accs  .append(ok   / tot)
         logger.info(f'>> [Step {step}] loss: {losses[-1]}, acc: {accs[-1]:.3%}')
@@ -234,13 +409,13 @@ def go_train(args):
 
   # model & optimizer & loss
   model, creterion = get_model_and_creterion(args)    # creterion accepts onehot label as truth
-  breakpoint()
   args.param_cnt = sum([p.size for p in model.parameters() if p.requires_grad])
   
-  optimizer = SGD(model.parameters(), lr=args.lr, momentum=0.9)
+  #optimizer = SGD(model.parameters(), lr=args.lr, momentum=0.9)
+  optimizer = Adam(model.parameters(), lr=args.lr)
 
   # info
-  logger.info(f'hparams: {vars(args)}')
+  logger.info(f'hparams: {pformat(vars(args))}')
 
   # train
   losses, accs, tlosses, taccs = train(args, model, optimizer, creterion, train_loader, test_loader, logger)
@@ -274,7 +449,7 @@ def go_train(args):
     json.dump(result, fh, indent=2, ensure_ascii=False)
 
 
-def go_infer(args, texts:List[str], ret_callable:bool=False) -> Union[Votes, Inferer]:
+def go_infer(args, texts:List[str]=None) -> Union[Votes, Inferer]:
   # configs
   out_dp: Path = LOG_PATH / args.analyzer / args.model
   assert out_dp.exists(), 'you must train this model before you can infer from :('
@@ -290,11 +465,11 @@ def go_infer(args, texts:List[str], ret_callable:bool=False) -> Union[Votes, Inf
   args.n_vocab = len(vocab) + 1  # <PAD>
   args.n_class = N_CLASS
 
-  # make a inferer callable 
-  if ret_callable:
+  # make a inferer callable if no text given
+  if texts is None:
     return lambda sent: infer(args, model, sent, tokenizer, word2id)
 
-  # pred directly
+  # predict directly if text is given
   preds = []
   n_ties = 0
   for sent in texts:
@@ -319,14 +494,14 @@ def get_args():
   parser = ArgumentParser()
   parser.add_argument('-L', '--analyzer',   default='kgram+', choices=ANALYZERS, help='tokenize level')
   parser.add_argument('-M', '--model',      default='Youro',  choices=MODELS,    help='model config string pattern')
-  parser.add_argument('-N', '--length',     default=32,   type=int, help='model input length (in tokens)')
   parser.add_argument('-P', '--pad',        default='\x00',         help='model input pad')
-  parser.add_argument('-D', '--embed_dim',  default=32,   type=int, help='model embed depth')
+  parser.add_argument('-N', '--length',     default=3,    type=int, help='model input length (in tokens)')
+  parser.add_argument('-D', '--repeat',     default=2,    type=int, help='circuit n_repeat, effecting embed depth')
   parser.add_argument('-E', '--epochs',     default=10,   type=int)
-  parser.add_argument('-B', '--batch_size', default=32,   type=int)
+  parser.add_argument('-B', '--batch_size', default=4,    type=int)
   parser.add_argument('--lr',               default=0.1,  type=float)
   parser.add_argument('--min_freq',         default=5,    type=int, help='min_freq for final embedding vocab')
-  parser.add_argument('--n_vote',           default=5,    type=int, help='number of voters at inference time')
+  parser.add_argument('--n_vote',           default=5,    type=int, help='max number of voters at inference time')
   parser.add_argument('--eval', action='store_true', help='compare result scores')
   return parser.parse_args()
 

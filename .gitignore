@@ -9,6 +9,7 @@ data/*
 
 # generated
 log/
+tmp/
 *.7z
 
 # repo

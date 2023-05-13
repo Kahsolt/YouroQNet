@@ -29,6 +29,7 @@ COULMNS  = ['label', 'text']
 SPLITS   = ['train', 'test', 'valid'] if IS_DEBUG else ['train', 'test']
 DATA_PATH = Path('data') if IS_DEBUG else Path('.')
 LOG_PATH  = Path('log') ; LOG_PATH.mkdir(exist_ok=True)
+TMP_PATH  = Path('tmp') ; TMP_PATH.mkdir(exist_ok=True)
 
 ANALYZERS = [
   'char',
@@ -63,7 +64,7 @@ if 'typing':
 
 mean   = lambda x: sum(x) / len(x)
 mode   = lambda x: np.argmax(np.bincount(x))
-argmax = lambda x: x.argmax([-1], False)    # [axis], keepdims
+argmax = lambda x: x.argmax([-1], False)    # [axis], keepdims; only for QTensor
 to_tensor = lambda *xs: tuple(QTensor(x) for x in xs) if len(xs) > 1 else QTensor(xs[0])
 
 ''' utils '''
@@ -131,7 +132,7 @@ def f1_score(result:NDArray, target:NDArray, label:int) -> float:
   p = tp / (tp + fp + 1e-7)
   f = tp / (tp + fn + 1e-7)
 
-  return np.round(2 * (p * f) / (p + f), 3)
+  return np.round(2 * (p * f) / (p + f), 3) if (p + f) > 0 else 0.0
 
 def get_acc_f1(pred:NDArray, target:NDArray, n_class:int=N_CLASS) -> AccF1:
   assert pred.dtype == target.dtype == np.int32, 'label should be inetegers'

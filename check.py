@@ -25,7 +25,7 @@ def f1_score(result, target, label) -> float:
   p = tp / (tp + fp + 1e-7)
   f = tp / (tp + fn + 1e-7)
 
-  return np.round(2 * (p * f) / (p + f), 3)
+  return np.round(2 * (p * f) / (p + f), 3) if (p + f) > 0 else 0.0
 
 
 def score(target, result) -> float:
