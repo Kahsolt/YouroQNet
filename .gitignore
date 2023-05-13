@@ -9,6 +9,7 @@ data/*
 
 # generated
 log/
+*.7z
 
 # repo
 repo/*
@@ -18,3 +19,4 @@ repo/*
 ref/*
 !ref/*.cmd
 !ref/Question-ML.png
+!ref/YouroNet.pdf
