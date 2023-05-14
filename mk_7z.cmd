@@ -7,6 +7,7 @@
   -xr!repo\ ^
   -xr!data\*.bin ^
   -xr!data\*_cleaned.csv ^
+  -xr!data\*_tokenized.txt ^
   -xr!data\valid.csv ^
   -xr!data\unknown.csv ^
   -xr!log\ ^
