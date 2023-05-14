@@ -94,9 +94,10 @@ run_baseline_*.py   # classical experiments
 run_baseline.cmd    # run script for run_baseline_*.py
 run_quantum.py      # quantum experiments
 run_quantum.cmd     # run script for run_quantum.py
+run_quantum_toy.py  # toy QNN for debug and verify
 
 # misc
-vis_*.py            # intercative demos
+vis_*.py            # intercative demos or debug scaffolds
 utils.py            # common utils
 
 # doc & lic

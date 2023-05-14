@@ -2,7 +2,7 @@
 # Author: Armit
 # Create Time: 2023/05/05 
 
-import sys
+import os
 import random
 from pathlib import Path
 from time import time
@@ -21,7 +21,7 @@ if 'pyvqnet & pyqpanda':
   from pyvqnet.qnn.quantumlayer import QuantumLayer
   from pyvqnet.utils.storage import load_parameters, save_parameters
 
-IS_DEBUG = sys.platform == 'win32'
+IS_DEBUG = os.environ.get('MODE_DEVELOP')
 
 N_CLASS  = 4
 RANDSEED = 114514
