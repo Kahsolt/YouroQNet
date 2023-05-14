@@ -21,16 +21,20 @@ And, code repo for the qualifying stage is here: [第二届“司南杯”初赛
 
 - `python answer.py` for preprocess & train
 - `python check.py` for evaluate
+- `python vis_tokenizer.py` for adaptive k-gram tokeinzer interactive demo
+- `python vis_youroqnet.py` for YouroQNet interactive demo
 
 ⚪ for full development
 
 - `pip install -r requirements_dev.txt` for extra dependencies
 - `pushd repo & init_repos.cmd & popd` for extra git repos
   - fasttext==0.9.2 requires numpy<1.24 (things might changed)
+- `start_shell.cmd` to enter deveolp run command env
+  - `start_shell.cmd py` to get a ipy console that quick refering to `pyvqnet`'s fucking undocumented-documentation with `help()`
 - `mk_preprocess.cmd` for making clean datasets, stats, plots & vocabs etc... (~7 minutes)
 - `python vis_project.py` to see 3d data projection (you will understand what the fuck this dataset is 👿)
-- `run_baseline.cmd` for classic models
-- `run_quantum.cmd` for quantum models
+- `run_baseline.cmd` to run classic models
+- `run_quantum.cmd` to run quantum models
 
 
 #### Dataset
@@ -99,6 +103,7 @@ run_quantum_toy.py  # toy QNN for debug and verify
 # misc
 vis_*.py            # intercative demos or debug scaffolds
 utils.py            # common utils
+start_shell.cmd     # develop env entry
 
 # doc & lic
 README.md
