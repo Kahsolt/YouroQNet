@@ -2,7 +2,6 @@
 # Author: Armit
 # Create Time: 2023/05/09 
 
-import json
 from pprint import pformat
 from argparse import ArgumentParser
 from traceback import print_exc
@@ -132,7 +131,7 @@ def compute_circuit(cq:QCircuit, qv:Qubits, qvm:QVM, mbit:int=1) -> Probs:
 def get_YouroQNet(args) -> QModelInit:
   ''' 熔炉ネットと言うのは、虚仮威し全て裏技を繋ぐもん '''
 
-  if 'hparams':
+  if 'hparam':
     # qubits: |p> for context, |q> for data buffer
     n_qubit_p = int(np.ceil(np.log2(args.n_class)))     # FIXME: need at leaset `n_class - 1`` qubits
     n_qubit_q = args.length
@@ -162,7 +161,7 @@ def get_YouroQNet(args) -> QModelInit:
     n_param_p = sum(n_param_p_parts)
     n_param   = n_param_t + n_param_p
 
-    if 'add hparams to args':
+    if 'add hparam to args':
       args.n_qubit_p   = n_qubit_p
       args.n_qubit_q   = n_qubit_q
       args.n_qubit     = n_qubit
@@ -176,8 +175,7 @@ def get_YouroQNet(args) -> QModelInit:
   def YouroQNet_qdrl(data:NDArray, param:NDArray, qv:Qubits, cv:Cbits, qvm:QVM):
     def embed_lookup(embed:NDArray, data:NDArray) -> NDArray:
       ids = data.astype(np.int32)               # [L], one sample
-      embed = embed.reshape(args.n_vocab, -1)   # [K, D=n_repeat*n_gate_param], whole embeding table
-      theta = embed[ids]                        # sentence related embeddings
+      theta = embed[ids]                        # [mL, D], sentence related embeddings
       theta_n = 2 * np.arctan(theta)            # NOTE: assure angle range in [-pi, pi]
       return theta_n
 
@@ -236,8 +234,8 @@ def get_YouroQNet(args) -> QModelInit:
     ctx: Qubits = qv[:n_qubit_p][::-1]  # |p>, current context
     buf: Qubits = qv[n_qubit_p:]        # |q>, placeholder for input sequence
     # split param
-    embed = param[:n_param_t]           # whole embedding table
-    theta = embed_lookup(embed, data)   # sentence related entries
+    embed = get_embedding(args, param)  # whole embed table, [K, D=n_repeat*n_gate_param]
+    theta = embed_lookup(embed, data)   # sentence related entries, [mL, D]
     psi   = param[n_param_t:]           # ansatz params
     return compute_circuit(build_circuit(theta, psi), qv, qvm, n_qubit_p)
 
@@ -247,6 +245,11 @@ def get_YouroQNet(args) -> QModelInit:
 def get_model_and_creterion(args) -> Tuple[QModel, Callable]:
   compute_circuit, loss_cls, n_qubit, n_param = globals()[f'get_{args.model}QNet'](args)
   return QuantumLayer(compute_circuit, n_param, 'cpu', n_qubit, 0, GRAD_METH[args.grad_meth], args.grad_dx), loss_cls()
+
+def get_embedding(args, param) -> NDArray:
+  assert hasattr(args, 'n_param_t'), f'args.n_param_t not found, forgot to load from {TASK_FILE} ??'
+  phi = param[:args.n_param_t]
+  return phi.reshape(args.n_vocab, -1)   # [K, D=n_repeat*n_gate_param]
 
 def get_vocab(args) -> Vocab:
   analyzer: str = args.analyzer
@@ -392,6 +395,7 @@ def go_train(args):
   args.expname = f'{args.analyzer}_{args.model}'
   out_dp: Path = LOG_PATH / args.analyzer / args.model
   out_dp.mkdir(exist_ok=True, parents=True)
+  args.out_dp = str(out_dp)
   logger = get_logger(out_dp / 'run.log', mode='w')
 
   # symbols (codebook)
@@ -413,17 +417,17 @@ def go_train(args):
     optimizer = Adam(model.parameters(), lr=args.lr)
 
   # info
-  logger.info(f'hparams: {pformat(vars(args))}')
+  logger.info(f'hparam: {pformat(vars(args))}')
 
   # train
   losses_and_accs = train(args, model, optimizer, creterion, train_loader, test_loader, logger)
   
   # plot
-  plot_loss_and_acc(losses_and_accs, out_dp / 'loss_acc.png', title=args.expname)
+  plot_loss_and_acc(losses_and_accs, out_dp / PLOT_FILE, title=args.expname)
   
   # save & load
-  save_ckpt(model, out_dp / 'model.pth')
-  load_ckpt(model, out_dp / 'model.pth')
+  save_ckpt(model, out_dp / MODEL_FILE)
+  load_ckpt(model, out_dp / MODEL_FILE)
   
   # eval
   result = { 'hparam': vars(args), 'scores': {} }
@@ -435,8 +439,7 @@ def go_train(args):
       'acc':  acc,
       'f1':   f1,
     }
-  with open(out_dp / 'result.json', 'w', encoding='utf-8') as fh:
-    json.dump(result, fh, indent=2, ensure_ascii=False)
+  json_dump(result, out_dp / TASK_FILE)
 
 
 def go_infer(args, texts:List[str]=None) -> Union[Votes, Inferer]:
@@ -446,7 +449,7 @@ def go_infer(args, texts:List[str]=None) -> Union[Votes, Inferer]:
   
   # model
   model, _ = get_model_and_creterion(args)
-  load_ckpt(model, out_dp / 'model.pth')
+  load_ckpt(model, out_dp / MODEL_FILE)
 
   # symbols (codebook)
   vocab = get_vocab(args)
@@ -473,8 +476,17 @@ def go_infer(args, texts:List[str]=None) -> Union[Votes, Inferer]:
   return preds
 
 
-def go_eval(args):
-  raise NotImplementedError
+def go_inspect(args):
+  out_dp = Path(args.out_dp)
+  hparam = json_load(out_dp / TASK_FILE)['hparam']
+  for k, v in hparam.items():
+    if not hasattr(args, k):
+      setattr(args, k, v)
+
+  param = load_parameters(out_dp / MODEL_FILE)
+  breakpoint()
+  embed = get_embedding(args, param)
+
 
 
 def get_args():
@@ -498,15 +510,15 @@ def get_args():
   parser.add_argument('--log_interval',       default=10,  type=int)
   parser.add_argument('--log_reset_interval', default=50,  type=int)
   parser.add_argument('--test_interval',      default=200, type=int)
-  parser.add_argument('--eval', action='store_true', help='compare result scores')
+  parser.add_argument('--inspect', action='store_true', help='inspect into the learned embeddings')
   return parser.parse_args()
 
 
 if __name__ == '__main__':
   args = get_args()
 
-  if args.eval:
-    go_eval(args)
+  if args.inspect:
+    go_inspect(args)
     exit(0)
 
   go_train(args)

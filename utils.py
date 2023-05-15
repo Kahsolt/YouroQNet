@@ -8,6 +8,7 @@ IS_MODE_DEV = os.environ.get('MODE_DEV')
 import random
 from pathlib import Path
 from time import time
+import json
 import logging
 from logging import Logger
 from traceback import print_exc
@@ -27,13 +28,16 @@ if 'pyvqnet & pyqpanda':
   from pyvqnet.qnn.quantumlayer import QuantumLayer
   from pyvqnet.utils.storage import load_parameters, save_parameters
 
-N_CLASS  = 4
-RANDSEED = 114514
-COULMNS  = ['label', 'text']
-SPLITS   = ['train', 'test', 'valid'] if IS_MODE_DEV else ['train', 'test']
-DATA_PATH = Path('data') if IS_MODE_DEV else Path('.')
-LOG_PATH  = Path('log') ; LOG_PATH.mkdir(exist_ok=True)
-TMP_PATH  = Path('tmp') ; TMP_PATH.mkdir(exist_ok=True)
+N_CLASS    = 4
+RANDSEED   = 114514
+COULMNS    = ['label', 'text']
+SPLITS     = ['train', 'test', 'valid'] if IS_MODE_DEV else ['train', 'test']
+DATA_PATH  = Path('data') if IS_MODE_DEV else Path('.')
+LOG_PATH   = Path('log') ; LOG_PATH.mkdir(exist_ok=True)
+TMP_PATH   = Path('tmp') ; TMP_PATH.mkdir(exist_ok=True)
+TASK_FILE  = 'task.json'
+MODEL_FILE = 'model.pth'
+PLOT_FILE  = 'loss_acc.png'
 
 ANALYZERS = [
   'char',
@@ -108,6 +112,14 @@ def timer(fn):
     print(f'[Timer]: {fn.__name__} took {end - start:.2f}s')
     return r
   return wrapper
+
+def json_dump(data:Any, fp:str):
+  with open(fp, 'w', encoding='utf-8') as fh:
+    json.dump(data, fh, indent=2, ensure_ascii=False)
+
+def json_load(fp:str):
+  with open(fp, 'w', encoding='utf-8') as fh:
+    return json.load(fh)
 
 def load_ckpt(model:Module, fp:str):
   model.load_state_dict(load_parameters(fp))

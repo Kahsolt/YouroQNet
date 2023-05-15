@@ -3,7 +3,6 @@
 # Create Time: 2023/05/05 
 
 import random
-import json
 from pathlib import Path
 from argparse import ArgumentParser
 import warnings ; warnings.simplefilter("ignore")
@@ -348,6 +347,7 @@ def go_train(args):
   args.expname = f'{args.analyzer}_{args.model}'
   out_dp: Path = LOG_PATH / args.analyzer / args.model
   out_dp.mkdir(exist_ok=True, parents=True)
+  args.out_dp = str(out_dp)
   logger = get_logger(out_dp / 'run.log', mode='w')
 
   # symbols (codebook)
@@ -382,17 +382,17 @@ def go_train(args):
   creterion = CrossEntropyLoss()    # creterion accepts integer label as truth
 
   # info
-  logger.info(f'hparams: {vars(args)}')
+  logger.info(f'hparam: {vars(args)}')
 
   # train
   losses_and_accs = train(args, model, optimizer, creterion, train_loader, test_loader, logger)
 
   # plot
-  plot_loss_and_acc(losses_and_accs, out_dp / 'loss_acc.png', title=args.expname)
+  plot_loss_and_acc(losses_and_accs, out_dp / PLOT_FILE, title=args.expname)
   
   # save & load
-  save_ckpt(model, out_dp / 'model.pth')
-  load_ckpt(model, out_dp / 'model.pth')
+  save_ckpt(model, out_dp / MODEL_FILE)
+  load_ckpt(model, out_dp / MODEL_FILE)
   
   # eval
   result = { 'hparam': vars(args), 'scores': {} }
@@ -405,8 +405,7 @@ def go_train(args):
       'f1':     f1s,
       'cmat':   cmats,
     }
-  with open(out_dp / 'result.json', 'w', encoding='utf-8') as fh:
-    json.dump(result, fh, indent=2, ensure_ascii=False)
+  json_dump(result, out_dp / TASK_FILE)
 
 
 def go_eval(args):
@@ -421,9 +420,6 @@ def go_eval(args):
     for dp in out_dp_base.iterdir():
       if not dp.is_dir(): continue
       if not any([dp.name.startswith(prefix) for prefix in MODEL_PREFXIES]): continue
-
-      with open(dp / 'result.json', 'w', encoding='utf-8') as fh:
-        result = json.load(fh)['scores']
 
 
 def get_args():

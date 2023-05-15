@@ -80,7 +80,7 @@ def go_train(args):
   model, creterion = get_model_and_creterion(args)
   args.param_cnt = sum([p.size for p in model.parameters() if p.requires_grad])
 
-  print(f'hparams: {pformat(vars(args))}')
+  print(f'hparam: {pformat(vars(args))}')
 
   if args.optim == 'SGD':
     optimizer = SGD(model.parameters(), lr=args.lr, momentum=0.9)
