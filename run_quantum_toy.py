@@ -12,7 +12,6 @@ from pyqpanda import QProg
 from pyqpanda import H, X, Y, Z, CNOT, SWAP, RX, RY, RZ, CR, CP
 from pyvqnet.tensor import QTensor
 from pyvqnet.qnn import QuantumLayer, ProbsMeasure
-from pyvqnet.qnn import RandomTemplate
 from pyvqnet.optim import Adam, SGD
 from pyvqnet.nn import MeanSquaredError
 
@@ -24,11 +23,11 @@ from utils import TMP_PATH, GRAD_METH
 #pdf = [0, 1/3, 1/3, 1/3]
 #pdf = [1/3, 0, 1/3, 1/3]
 #pdf = [1/3, 1/3, 0, 1/3]
-pdf = [1/3, 1/3, 1/3, 0]
+#pdf = [1/3, 1/3, 1/3, 0]
 # you can also try any other distribution
 #pdf = [1/4, 1/2, 1/8, 1/8]
 # random distribution
-#pdf = None
+pdf = None
 
 
 init_params = None
@@ -122,7 +121,7 @@ def train(args):
   plt.subplot(212)
   plt.plot(np.log(loss_shot))
   plt.suptitle('loss & log(loss)')
-  plt.savefig(TMP_PATH / 'loss.png', dpi=400)
+  plt.savefig(TMP_PATH / 'run_quantum_toy_loss.png', dpi=400)
   #plt.show()
 
   param_shot = np.stack(param_shot, axis=0)
@@ -131,7 +130,7 @@ def train(args):
     plt.plot(param_shot[:, i], label=i)
   plt.suptitle('params')
   plt.legend()
-  plt.savefig(TMP_PATH / 'params.png', dpi=600)
+  plt.savefig(TMP_PATH / 'run_quantum_toy_params.png', dpi=600)
   plt.show()
 
 
