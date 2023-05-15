@@ -70,7 +70,45 @@ class LogOnce:
   export_circuit = True
 
 
-def compute_circuit(cq:QCircuit, qv:Qubits, qvm:QVM, mbit:int=2) -> Probs:
+def StrongEntangleCircuitTemplate(qv:Qubits, param:NDArray, rots:List[QGate]=[RY, RZ], entgl:QGate=CNOT) -> QCircuit:
+  ''' rotate each qubit in `qv` by `rots` respectively, then entangle them with `entgl` cyclically '''
+  
+  # sanity check
+  assert all([rot in S_PGATES for rot in rots]), 'rot must be a parameterized single-qubit gate'
+  #assert entgl in D_GATES + D_PGATES, 'engtl must be a double-qubit gate'
+  assert entgl is CNOT, 'engtl only support CNOT so far'
+  nq = len(qv)
+  param = param.reshape(nq, len(rots))
+
+  qc = QCircuit()
+  # rotations
+  for i in range(nq):
+    for j, rot in enumerate(rots):
+      qc << rot(qv[i], param[i][j])
+  # entangles
+  for i in range(nq - 1):
+    qc << entgl(qv[i], qv[i + 1])
+  if nq >= 3:
+    qc << entgl(qv[i + 1], qv[0])   # loopback
+  return qc
+
+def ControlMultiCircuitTemplate(q:Qubit, qv:Qubits, param:NDArray, rots:List[QGate]=[RY, RZ]) -> QCircuit:
+  ''' rotate each target qubit in `qv` respectively, under the control of qubit `q` '''
+  
+  # sanity check
+  #assert entgl in D_GATES + D_PGATES, 'engtl must be a double-qubit gate'
+  assert all([rot in S_PGATES for rot in rots]), 'rot must be a parameterized single-qubit gate'
+  nq = len(qv)
+  param = param.reshape(nq, len(rots))
+
+  # controlled rotations
+  qc = QCircuit()
+  for i in range(nq):
+    for j, rot in enumerate(rots):
+      qc << rot(qv[i], param[i][j]).control(q)
+  return qc
+
+def compute_circuit(cq:QCircuit, qv:Qubits, qvm:QVM, mbit:int=1) -> Probs:
   ''' set mbit to measure on the first m-qubits '''
 
   prog = QProg() << cq
@@ -90,54 +128,13 @@ def compute_circuit(cq:QCircuit, qv:Qubits, qvm:QVM, mbit:int=2) -> Probs:
 
   return prob
 
-def get_NaiveQNet(args) -> QModelInit:
-  ''' naive qdrl for simple binary clf '''
-
-  # TODO: wtf make a qunatum baseline
-  raise NotImplementedError
 
 def get_YouroQNet(args) -> QModelInit:
   ''' 熔炉ネットと言うのは、虚仮威し全て裏技を繋ぐもん '''
 
-  def StrongEntangleCircuitTemplate(qv:Qubits, param:NDArray, rots:List[QGate]=[RY, RZ], entgl:QGate=CNOT) -> QCircuit:
-    ''' rotate each qubit in `qv` by `rots` respectively, then entangle them with `entgl` cyclically '''
-    
-    # sanity check
-    assert all([rot in S_PGATES for rot in rots]), 'rot must be a parameterized single-qubit gate'
-    #assert entgl in D_GATES + D_PGATES, 'engtl must be a double-qubit gate'
-    assert entgl is CNOT, 'engtl only support CNOT so far'
-    nq = len(qv)
-    param = param.reshape(nq, len(rots))
-
-    qc = QCircuit()
-    # rotations
-    for i in range(nq):
-      for j, rot in enumerate(rots):
-        qc << rot(qv[i], param[i][j])
-    # entangles
-    for i in range(nq - 1):
-      qc << entgl(qv[i], qv[i + 1])
-    if nq >= 3:
-      qc << entgl(qv[i + 1], qv[0])   # back loop
-    return qc
-
-  def ControlMultiCircuitTemplate(q:Qubit, qv:Qubits, params:NDArray, entgl:QGate=RY) -> QCircuit:
-    ''' entangle the control qubit `q` over each target qubit in `qv` respectively '''
-    
-    # sanity check
-    #assert entgl in D_GATES + D_PGATES, 'engtl must be a double-qubit gate'
-    assert entgl is RY, 'engtl only support RY so far'
-    nq = len(qv)
-
-    # controls
-    qc = QCircuit()
-    for i in range(nq):
-      qc << RY(qv[i], params[i]).control(q)
-    return qc
-
   if 'hparams':
     # qubits: |p> for context, |q> for data buffer
-    n_qubit_p = int(np.ceil(np.log2(args.n_class)))
+    n_qubit_p = int(np.ceil(np.log2(args.n_class)))     # FIXME: need at leaset `n_class - 1`` qubits
     n_qubit_q = args.length
     n_qubit   = n_qubit_p + n_qubit_q
 
@@ -145,14 +142,14 @@ def get_YouroQNet(args) -> QModelInit:
     n_repeat  = args.repeat
     SEC_rots  = [RY, RZ]    # can tune this
     SEC_entgl = CNOT        # NOTE: fixed for the moment
-    CMC_entgl = RY          # CRY, NOTE: fixed for the moment
+    CMC_rots  = [RY, RZ]    # can tune this
     if 'render circuit templates':
       StrongEntangleCircuit = lambda *args, **kwargs: StrongEntangleCircuitTemplate(*args, **kwargs, rots=SEC_rots, entgl=SEC_entgl)
-      ControlMultiCircuit   = lambda *args, **kwargs: ControlMultiCircuitTemplate  (*args, **kwargs,                entgl=CMC_entgl)
+      ControlMultiCircuit   = lambda *args, **kwargs: ControlMultiCircuitTemplate  (*args, **kwargs, rots=CMC_rots)
     
     # params: theta for embed, psi for ansatz
     n_param_SEC = sum(get_gate_param(g) for g in SEC_rots + [SEC_entgl])
-    n_param_CMC = get_gate_param(CMC_entgl)
+    n_param_CMC = sum(get_gate_param(g) for g in CMC_rots)
     n_param_t_parts = [
       args.n_vocab * n_repeat * n_param_SEC,      # embed
     ]
@@ -220,8 +217,7 @@ def get_YouroQNet(args) -> QModelInit:
       theta = theta.reshape(len(buf), n_repeat, -1)   # [L=16, n_repeat=4, n_gate_param=2]
 
       # build circuit
-      qc = QCircuit()
-      qc << H(qv)
+      qc = QCircuit() # << H(qv)
       # NOTE: to keep code syntacical aligned, use the last portion for init
       qc << build_ctx_tranx(psi_T[-1, :]) \
          << BARRIER(qv)
@@ -335,7 +331,7 @@ def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, tes
   test_losses, test_accs, test_f1s = [], [], []
   tot, ok, loss = 0, 0, 0.0
   for e in range(args.epochs):
-    logger.info(f'[Epoch {e}/{args.epochs}]')
+    #logger.info(f'[Epoch {e}/{args.epochs}]')
 
     model.train()
     for X_np, Y_np in train_loader():

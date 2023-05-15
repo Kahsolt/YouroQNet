@@ -97,7 +97,6 @@ def go_train(args):
 if __name__ == '__main__':
   args = get_args()
   # tunable
-  args.repeat = 4
   args.epochs = 150
   args.batch_size = 1
   args.lr = 0.01
