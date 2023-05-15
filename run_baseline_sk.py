@@ -303,7 +303,7 @@ def go_eval(args):
         plt.xticks(ticks=range(len(names)), labels=names, rotation=90, ha='right')
       plt.suptitle(f'f1-score {feature}-{analyzer}')
       plt.tight_layout()
-      plt.savefig(LOG_PATH / f'scores_{feature}_{analyzer}.png', dpi=600)
+      savefig(LOG_PATH / f'scores_{feature}_{analyzer}.png')
 
       plt.clf()
       plt.figure(figsize=(6, 8))
@@ -315,7 +315,7 @@ def go_eval(args):
         plt.xticks(ticks=range(len(names)), labels=names, rotation=90, ha='right')
       plt.suptitle(f'f1-score avg. {feature}-{analyzer}')
       plt.tight_layout()
-      plt.savefig(LOG_PATH / f'scores_{feature}_{analyzer}-avg.png', dpi=600)
+      savefig(LOG_PATH / f'scores_{feature}_{analyzer}-avg.png')
 
 
 if __name__ == '__main__':

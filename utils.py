@@ -19,7 +19,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 if not IS_MODE_DEV:
-  import matplotlib ; matplotlib.use('agg')
+  import matplotlib; matplotlib.use('agg')
+else:
+  plt.rcParams['font.sans-serif'] = ['SimHei']
+  plt.rcParams['axes.unicode_minus'] = False
 
 if 'pyvqnet & pyqpanda':
   from pyqpanda import CPUQVM, Qubit, QVec, ClassicalCondition
@@ -260,6 +263,13 @@ def get_acc_f1(pred:NDArray, target:NDArray, n_class:int=N_CLASS) -> AccF1:
 
 ''' plot '''
 
+def savefig(fp:str):
+  if not fp: return
+
+  plt.savefig(fp, dpi=600)
+  print(f'>> savefig to {fp}')
+  return plt.gcf()
+
 def plot_loss_and_acc(losses_and_accs:LossesAccs, fp:str=None, title:str='') -> Figure:
   losses, accs, tlosses, taccs = losses_and_accs
 
@@ -273,7 +283,4 @@ def plot_loss_and_acc(losses_and_accs:LossesAccs, fp:str=None, title:str='') -> 
   plt.legend()
   plt.suptitle(title)
 
-  if fp:
-    plt.savefig(fp, dpi=600)
-    print(f'>> savefig to {fp}')
-  return plt.gcf()
+  return savefig(fp)

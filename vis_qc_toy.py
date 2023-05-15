@@ -15,7 +15,7 @@ from pyvqnet.qnn import QuantumLayer, ProbsMeasure
 from pyvqnet.optim import Adam, SGD
 from pyvqnet.nn import MeanSquaredError
 
-from utils import TMP_PATH, GRAD_METH
+from utils import TMP_PATH, GRAD_METH, savefig
 
 # NOTE: a toy qdrl_circuit approximating arbitary normalized prob-dist
 
@@ -44,7 +44,7 @@ def make_qdrl_circuit(n_repeat, input, params, qv, cv, qvm):
 
   global init_params
 
-  if init_params is None:
+  if init_params is None:   # try customize init_weight, but failed :(
     n_params = np.cumprod(params.shape).item()
     init_params = np.linspace(0, np.pi, n_params).reshape(params.shape)
     for i in range(n_params):
@@ -124,8 +124,7 @@ def train(args):
   plt.subplot(212)
   plt.plot(np.log(loss_shot))
   plt.suptitle('loss & log(loss)')
-  plt.savefig(TMP_PATH / 'run_quantum_toy_loss.png', dpi=400)
-  #plt.show()
+  savefig(TMP_PATH / 'run_quantum_toy_loss.png')
 
   param_shot = np.stack(param_shot, axis=0)
   plt.clf()
@@ -133,7 +132,7 @@ def train(args):
     plt.plot(param_shot[:, i], label=i)
   plt.suptitle('params')
   plt.legend()
-  plt.savefig(TMP_PATH / 'run_quantum_toy_params.png', dpi=600)
+  savefig(TMP_PATH / 'run_quantum_toy_params.png')
   plt.show()
 
 

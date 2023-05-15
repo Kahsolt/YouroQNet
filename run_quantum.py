@@ -121,9 +121,14 @@ def compute_circuit(cq:QCircuit, qv:Qubits, qvm:QVM, mbit:int=1) -> Probs:
 
   if LogOnce.export_circuit:
     LogOnce.export_circuit = False
-    try: draw_qprog(prog, output='pic', filename=str(TMP_PATH/'circuit.png'))
+    try:
+      fp = TMP_PATH / 'circuit.png'
+      print(f'save circuit to {fp}')
+      draw_qprog(prog, output='pic', filename=str(fp))
     except: pass
-    draw_qprog_text(prog, output_file=str(TMP_PATH/'circuit.txt'))
+    fp = TMP_PATH / 'circuit.txt'
+    print(f'save circuit to {fp}')
+    draw_qprog_text(prog, output_file=str(fp))
 
   return prob
 
@@ -466,9 +471,7 @@ def go_inspect(args, name_suffix:str=''):
   plt.imshow(2*np.arctan(embed), cmap='bwr')
   plt.colorbar(orientation='vertical', location='right')
   plt.suptitle(f'embed: {embed.shape}')
-  fp = out_dp / 'embed.png'
-  plt.savefig(fp, dpi=600)
-  print(f'savefig to {fp}')
+  savefig(out_dp / 'embed.png')
 
 
 def get_args():

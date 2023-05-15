@@ -15,7 +15,7 @@ from pyqpanda import H, X, Y, Z, CNOT, SWAP, RX, RY, RZ, CR, CP
 from pyvqnet.qnn import ProbsMeasure
 from pyvqnet.qnn import RandomTemplate
 
-from utils import TMP_PATH, timer
+from utils import TMP_PATH, timer, savefig
 
 
 if 'qvm':
@@ -115,7 +115,7 @@ def plot_qc_func(args):
     plt.clf()
     plt.hist(O.flatten(), bins=100)
     plt.suptitle('vis_qc_func_hist')
-    plt.savefig(TMP_PATH / 'vis_qc_func_hist.png', dpi=600)
+    savefig(TMP_PATH / 'vis_qc_func_hist.png')
 
   rng = O.max() - O.min()
   if rng < 1e-5: O = np.zeros_like(O) + (rng / 2)
@@ -123,7 +123,7 @@ def plot_qc_func(args):
   plt.clf()
   plt.scatter(X, Y, s=10, c=O, alpha=0.7, cmap='bwr')
   plt.suptitle('vis_qc_func')
-  plt.savefig(TMP_PATH / 'vis_qc_func.png', dpi=600)
+  savefig(TMP_PATH / 'vis_qc_func.png')
   plt.show()
 
 def plot_qc_f(args):   # use the pre-defined `f`
@@ -141,7 +141,7 @@ def plot_qc_f(args):   # use the pre-defined `f`
     ax = plt.axes(projection='3d')
     ax.scatter(X, Y, Z, zdir='z', s=10, c=O, alpha=0.7, cmap='bwr')
     plt.suptitle(f'vis_qc_func_f_{i}')
-    plt.savefig(TMP_PATH / f'vis_qc_func_f_{i}.png', dpi=600)
+    savefig(TMP_PATH / f'vis_qc_func_f_{i}.png')
     plt.show()
 
 

@@ -24,6 +24,7 @@ train_data = [
   (1, '你讨厌我'),
   (1, '讨厌西瓜'),
   (1, '你讨厌苹果'),
+  (1, '我恨恨恨'),
 ]
 test_data = [
   (0, '喜欢'),
@@ -32,6 +33,7 @@ test_data = [
   (0, '你爱我'),
   (1, '讨厌你'),
   (1, '讨厌讨厌'),
+  (1, '恨你'),
 ]
 vocab = { w: sum(txt.count(w) for _, txt in train_data) for w in words }
 
@@ -54,7 +56,7 @@ def go_all(args):
   trainset = preprocess(train_data)
   validset = preprocess(test_data)
 
-  if 'preview_dataset':
+  if not 'preview_dataset':
     print('=' * 72)
     print('vocab:', vocab)
     print('word2id:', word2id)
@@ -74,6 +76,10 @@ def go_all(args):
 
   # inspect
   go_inspect(args, name_suffix=SUFFIX)
+
+  # hijack the plt axis
+  words = [id2word[id] for id in sorted(id2word.keys())]
+  plt.yticks(range(len(words)), words)
   plt.show()
 
 
@@ -84,10 +90,10 @@ if __name__ == '__main__':
   print('>>       you must modify the code to change them, cannot passing by cmdline :)')
 
   # tunable
-  args.epochs     = 70
-  args.n_repeat   = 2
+  args.epochs     = 150
+  args.n_repeat   = 1
   args.batch_size = 1
-  args.lr         = 0.01
+  args.lr         = 0.1
   args.grad_meth  = 'fd'
   args.grad_dx    = 0.01
 

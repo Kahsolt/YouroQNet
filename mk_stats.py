@@ -10,7 +10,7 @@ from typing import List, Callable
 import jieba
 import matplotlib.pyplot as plt
 
-from utils import LOG_PATH, SPLITS, N_CLASS, load_dataset
+from utils import LOG_PATH, SPLITS, N_CLASS, load_dataset, savefig
 from mk_vocab import load_vocab, dump_vocab, sort_vocab
 
 
@@ -28,7 +28,7 @@ def write_stats(tokens:List[str], name:str, subfolder:str=''):
   plt.clf()
   plt.plot(voc.values())
   plt.suptitle(f'freq_{name}')
-  plt.savefig(out_dp / f'freq_{name}.png')
+  savefig(out_dp / f'freq_{name}.png')
 
 
 def write_lens(lens:List[int], name:str, subfolder:str=''):
@@ -42,7 +42,7 @@ def write_lens(lens:List[int], name:str, subfolder:str=''):
   plt.clf()
   plt.plot(x, y)
   plt.suptitle(f'len_{name}')
-  plt.savefig(out_dp / f'len_{name}.png')
+  savefig(out_dp / f'len_{name}.png')
 
 
 def make_stats(kind:str, line_parser:Callable):
