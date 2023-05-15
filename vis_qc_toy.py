@@ -29,6 +29,9 @@ from utils import TMP_PATH, GRAD_METH
 # random distribution
 pdf = None
 
+# modify according to circuit arch
+n_gate = 5
+
 
 init_params = None
 
@@ -146,7 +149,6 @@ if __name__ == '__main__':
   parser.add_argument(      '--lr',        default=0.1,  type=float)
   args = parser.parse_args()
 
-  n_gate = 5
   args.param_num = args.n_repeat * n_gate
 
   train(args)
