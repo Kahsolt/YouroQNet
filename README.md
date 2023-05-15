@@ -9,6 +9,9 @@ This repo contains code for the final problem of the OriginQ's [2nd CCF "Pilot C
 And, code repo for the qualifying stage is here: [第二届“司南杯”初赛](https://github.com/Kahsolt/CCF-2nd-Pilot-Cup-first-stage)
 
 
+![YouroQNet](img/YouroQNet.png)
+
+
 ### Quickstart
 
 ⚪ install
@@ -26,9 +29,7 @@ And, code repo for the qualifying stage is here: [第二届“司南杯”初赛
 
 - `python vis_tokenizer.py` for adaptive k-gram tokeinzer interactive demo
 - `python vis_youroqnet.py` for YouroQNet interactive demo
-  - you can run the toy version first of all 👇
-    - `python vis_youroqnet_toy.py`
-    - `python vis_youroqnet_toy.py --inspect`
+  - `python vis_youroqnet_toy.py` (👈 run the toy version out of box before all)
 
 ⚪ for full development
 
@@ -43,12 +44,14 @@ And, code repo for the qualifying stage is here: [第二届“司南杯”初赛
 - `run_baseline.cmd` to run classic models
 - `run_quantum.cmd` to run quantum models
 
+⚠ The training sometimes might fail due to ill random parameter initialization, when trainset loss not tends to decay or quickly go overfit, just kill it & retry 😅
+
 ⚪ core idea & contributions
 
 - adaptive k-gram tokenizer (see [mk_vocab.py](mk_vocab.py), interactivate demo [vis_tokenizer.py](vis_tokenizer.py))
 - YouroQNet for text clf (see [run_quantum.py](run_quantum.py), interactivate demo [vis_youroqnet.py](vis_youroqnet.py))
 
-ℹ see our PPT [YouroQNet.pdf](ref/YouroQNet.pdf) for more conceptual understanding 🎉
+ℹ See our PPT [YouroQNet.pdf](ref/YouroQNet.pdf) for more conceptual understanding 🎉
 
 
 #### Dataset
@@ -156,7 +159,7 @@ LICESE
 
 ### Citation
 
-If you find our work useful, please cite us~ 😃
+If you find our work useful, please give a star ⭐ and cite us~ 😃
 
 ```
 @misc{kahsolt2023,
