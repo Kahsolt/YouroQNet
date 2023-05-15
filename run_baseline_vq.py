@@ -413,20 +413,6 @@ def go_train(args):
   json_dump(result, out_dp / TASK_FILE)
 
 
-def go_eval(args):
-  # just ignored beacuse not good results :(
-  raise NotImplementedError
-
-  MODEL_PREFXIES = [ 'dnn', 'cnn', 'rnn' ]
-  for analyzer in ANALYZERS:
-    out_dp_base = LOG_PATH / analyzer
-    if not out_dp_base.exists(): continue
-
-    for dp in out_dp_base.iterdir():
-      if not dp.is_dir(): continue
-      if not any([dp.name.startswith(prefix) for prefix in MODEL_PREFXIES]): continue
-
-
 def get_args():
   parser = ArgumentParser()
   parser.add_argument('-L', '--analyzer',   default='kgram+', choices=ANALYZERS, help='tokenize level')
@@ -442,16 +428,11 @@ def get_args():
   parser.add_argument('--n_class',    default=N_CLASS,    type=int, help='num of class')
   parser.add_argument('--log_interval',     default=50,  type=int, help='log & reset loss/acc')
   parser.add_argument('--test_interval',    default=200, type=int, help='test on valid split')
-  parser.add_argument('--eval', action='store_true', help='compare result scores')
   return parser.parse_args()
 
 
 if __name__ == '__main__':
   args = get_args()
-
-  if args.eval:
-    go_eval(args)
-    exit(0)
 
   if args.model.startswith('cnn'):
     print('The TextCNN models are possibly causing C-level kernel dump in loss.backward() !!')

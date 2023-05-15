@@ -270,8 +270,8 @@ def test(args, model:QModel, creterion, test_loader:Dataloader, logger:Logger) -
 
   Y_true = np.asarray(Y_true, dtype=np.int32)
   Y_pred = np.asarray(Y_pred, dtype=np.int32)
-  print('Y_true', Y_true)
-  print('Y_pred', Y_pred)
+  print('Y_true:', Y_true)
+  print('Y_pred:', Y_pred)
 
   acc, f1 = get_acc_f1(Y_pred, Y_true, args.n_class)
   logger.info(f'>> acc: {acc:.3%}')
@@ -393,6 +393,7 @@ def go_train(args, user_vocab_data:Tuple[Vocab, Dataset, Dataset]=None, name_suf
   for split in SPLITS:
     datat_loader = locals().get(f'{split}_loader')
     if datat_loader is None: continue     # ignore if valid_loader not exists
+    logger.info(f'testing split {split} ...')
     loss, acc, f1 = test(args, model, creterion, datat_loader, logger)
     result['scores'][split] = {
       'loss': loss,
@@ -443,13 +444,13 @@ def go_inspect(args, name_suffix:str=''):
   out_dp: Path = LOG_PATH / args.analyzer / f'{args.model}{name_suffix}'
   assert out_dp.exists(), 'you must train this model before you can infer from :('
 
-  # hparam
+  # hparam load
   hparam = json_load(out_dp / TASK_FILE)['hparam']
   for k, v in hparam.items():
     if not hasattr(args, k):
       setattr(args, k, v)
 
-  # embed
+  # embed load
   ckpt = load_parameters(out_dp / MODEL_FILE)
   param = ckpt['m_para'].to_numpy()
   print('param.shape:', param.shape)
@@ -491,15 +492,11 @@ def get_args():
   parser.add_argument('--slog_interval',    default=10,  type=int, help='log loss/acc')
   parser.add_argument('--log_interval',     default=50,  type=int, help='log & reset loss/acc')
   parser.add_argument('--test_interval',    default=200, type=int, help='test on valid split')
-  parser.add_argument('--inspect', action='store_true', help='inspect into the learned embeddings')
   return parser.parse_args()
 
 
 if __name__ == '__main__':
   args = get_args()
 
-  if args.inspect:
-    go_inspect(args)
-    exit(0)
-
   go_train(args)
+  go_inspect(args)

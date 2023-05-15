@@ -89,7 +89,5 @@ IF "!FINAL!"=="1" (
 ECHO start eval sk...
 python run_baseline_sk.py --eval
 
-ECHO start eval vq...
-python run_baseline_vq.py --eval
 
 ECHO Done.

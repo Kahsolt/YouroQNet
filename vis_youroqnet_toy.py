@@ -78,8 +78,13 @@ def go_inspect_proxy(args):
 
 if __name__ == '__main__':
   args = get_args()
+
+  print('>> warn: some cmdline args for the toy YouorQNet is fixed hard-coded')
+  print('>>       you must modify the code to change them, cannot passing by cmdline :)')
+
   # tunable
-  args.epochs     = 100
+  args.epochs     = 70
+  args.n_repeat   = 1
   args.batch_size = 1
   args.lr         = 0.01
   args.grad_meth  = 'fd'
@@ -95,10 +100,7 @@ if __name__ == '__main__':
   args.slog_interval = 10
   args.log_interval  = 50
   args.test_interval = 50
-  
-  if args.inspect:
-    go_inspect_proxy(args)
-    exit(0)
 
   preview_dataset(args)
   go_train_proxy(args)
+  go_inspect_proxy(args)
