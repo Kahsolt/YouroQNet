@@ -3,7 +3,7 @@
 # Create Time: 2023/05/05 
 
 import os
-IS_DEBUG = os.environ.get('MODE_DEVELOP')
+IS_MODE_DEV = os.environ.get('MODE_DEV')
 
 import random
 from pathlib import Path
@@ -17,7 +17,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
-if not IS_DEBUG:
+if not IS_MODE_DEV:
   import matplotlib ; matplotlib.use('agg')
 
 if 'pyvqnet & pyqpanda':
@@ -30,8 +30,8 @@ if 'pyvqnet & pyqpanda':
 N_CLASS  = 4
 RANDSEED = 114514
 COULMNS  = ['label', 'text']
-SPLITS   = ['train', 'test', 'valid'] if IS_DEBUG else ['train', 'test']
-DATA_PATH = Path('data') if IS_DEBUG else Path('.')
+SPLITS   = ['train', 'test', 'valid'] if IS_MODE_DEV else ['train', 'test']
+DATA_PATH = Path('data') if IS_MODE_DEV else Path('.')
 LOG_PATH  = Path('log') ; LOG_PATH.mkdir(exist_ok=True)
 TMP_PATH  = Path('tmp') ; TMP_PATH.mkdir(exist_ok=True)
 
@@ -54,6 +54,7 @@ if 'fix random seed':
   np.random.seed(RANDSEED)
 
 if 'typing':
+  # quantum
   QVM         = CPUQVM
   QModel      = QuantumLayer
   QModelInit  = Tuple[Callable, Any, int, int]   # compute_circuit(), creteron_cls, n_qubit, n_param
@@ -61,17 +62,20 @@ if 'typing':
   Cbit        = ClassicalCondition
   Cbits       = List[Cbit]
   Probs       = List[float]
-
+  # data
   NDArray     = np.ndarray
   Dataloader  = Generator[Tuple[NDArray, NDArray], None, None]
   Dataset     = Tuple[List[str], NDArray]   # text, label
   Datasets    = Tuple[Dataset, ...]
+  # train
+  LossesAccs  = Tuple[List[float], ...]
+  # test
   Score       = Tuple[float, float, float, NDArray]   # prec, recall, f1, cmat
   Scores      = Tuple[List[float], List[float], List[float], List[NDArray]]   # multi splits
   F1          = List[float]                 # [f1]
   AccF1       = Tuple[float, F1]            # acc, [f1]
   Metrics     = Tuple[float, float, F1]     # loss, acc, [f1]
-  LossesAccs  = Tuple[List[float], ...]
+  # infer
   Votes       = List[int]
   Inferer     = Callable[[str], Votes]
 
@@ -110,46 +114,6 @@ def load_ckpt(model:Module, fp:str):
 
 def save_ckpt(model:Module, fp:str):
   save_parameters(model.state_dict(), fp)
-
-''' dataset '''
-
-def load_dataset(split:str, normalize:bool=True, fp:Path=None, seed:int=RANDSEED) -> Dataset:
-  ''' `fp` overrides the default filepath '''
-
-  fp_norm = fp or DATA_PATH / f'{split}_cleaned.csv'
-  if normalize and fp_norm.exists():
-    print(f'load cleaned {split} from cache {fp_norm}')
-    return load_dataset(split, False, fp_norm)
-
-  fp = fp or DATA_PATH / f'{split}.csv'
-  df = pd.read_csv(fp)
-  c_lbl, c_txt = df.columns[0], df.columns[-1]
-  if split == 'valid':    # the whole valid set is too large
-    df = pd.concat([df_cls.sample(n=1000, random_state=seed) for _, df_cls in df.groupby(c_lbl)])
-  Y = df[c_lbl].to_numpy().astype(np.int32)
-  T = df[c_txt].to_numpy().tolist()
-  if normalize: T = [clean_text(t) for t in T]
-  return T, Y
-
-''' metric '''
-
-def f1_score(result:NDArray, target:NDArray, label:int) -> float:
-  ''' copied from the judge code '''
-
-  solution_label = (result == label).astype(int)
-  target_label   = (target == label).astype(int)
-  tp = np.sum(solution_label * target_label)
-  fp = np.sum(solution_label * (1 - target_label))
-  fn = np.sum((1 - solution_label) * target_label)
-
-  p = tp / (tp + fp + 1e-7)
-  f = tp / (tp + fn + 1e-7)
-
-  return np.round(2 * (p * f) / (p + f), 3) if (p + f) > 0 else 0.0
-
-def get_acc_f1(pred:NDArray, target:NDArray, n_class:int=N_CLASS) -> AccF1:
-  assert pred.dtype == target.dtype == np.int32, 'label should be inetegers'
-  return (pred == target).mean(), [f1_score(pred, target, label) for label in range(n_class)]
 
 ''' text '''
 
@@ -229,22 +193,62 @@ def align_words(words:List[str], n_limit:int, pad:str='') -> List[str]:
   cp = random.randrange(nlen - n_limit)
   return words[cp : cp + n_limit]
 
+''' dataset '''
+
+def load_dataset(split:str, normalize:bool=True, fp:Path=None, seed:int=RANDSEED) -> Dataset:
+  ''' `fp` overrides the default filepath '''
+
+  fp_norm = fp or DATA_PATH / f'{split}_cleaned.csv'
+  if normalize and fp_norm.exists():
+    print(f'load cleaned {split} from cache {fp_norm}')
+    return load_dataset(split, False, fp_norm)
+
+  fp = fp or DATA_PATH / f'{split}.csv'
+  df = pd.read_csv(fp)
+  c_lbl, c_txt = df.columns[0], df.columns[-1]
+  if split == 'valid':    # the whole valid set is too large
+    df = pd.concat([df_cls.sample(n=1000, random_state=seed) for _, df_cls in df.groupby(c_lbl)])
+  Y = df[c_lbl].to_numpy().astype(np.int32)
+  T = df[c_txt].to_numpy().tolist()
+  if normalize: T = [clean_text(t) for t in T]
+  return T, Y
+
+''' metric '''
+
+def f1_score(result:NDArray, target:NDArray, label:int) -> float:
+  ''' copied from the judge code '''
+
+  solution_label = (result == label).astype(int)
+  target_label   = (target == label).astype(int)
+  tp = np.sum(solution_label * target_label)
+  fp = np.sum(solution_label * (1 - target_label))
+  fn = np.sum((1 - solution_label) * target_label)
+
+  p = tp / (tp + fp + 1e-7)
+  f = tp / (tp + fn + 1e-7)
+
+  return np.round(2 * (p * f) / (p + f), 3) if (p + f) > 0 else 0.0
+
+def get_acc_f1(pred:NDArray, target:NDArray, n_class:int=N_CLASS) -> AccF1:
+  assert pred.dtype == target.dtype == np.int32, 'label should be inetegers'
+  return (pred == target).mean(), [f1_score(pred, target, label) for label in range(n_class)]
+
 ''' plot '''
 
 def plot_loss_and_acc(losses_and_accs:LossesAccs, fp:str=None, title:str='') -> Figure:
   losses, accs, tlosses, taccs = losses_and_accs
+
   plt.clf()
   ax = plt.axes()
   ax.plot( losses, 'dodgerblue', label='train loss')
-  ax.plot(tlosses, 'b',          label='valid loss')
+  ax.plot(tlosses, 'b',          label='test loss')
   ax2 = ax.twinx()
   ax2.plot( accs, 'orangered', label='train acc')
-  ax2.plot(taccs, 'r',         label='valid acc')
+  ax2.plot(taccs, 'r',         label='test acc')
   plt.legend()
-  plt.suptitle('YouroQNet toy')
+  plt.suptitle(title)
 
   if fp:
-    fp = TMP_PATH / 'vis_youroqnet_toy.png'
     plt.savefig(fp, dpi=600)
     print(f'>> savefig to {fp}')
   return plt.gcf()

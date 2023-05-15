@@ -1,5 +1,5 @@
 @ECHO OFF
-SET MODE_DEVELOP=1
+SET MODE_DEV=1
 
 REM use this script to startup deveopment env :)
 
