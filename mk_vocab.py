@@ -15,8 +15,9 @@ from utils import LOG_PATH, load_dataset, timer, is_zh_word
 
 ''' vocab '''
 
-Vocab  = Dict[str, int]
-VocabP = Dict[str, float]
+Vocab  = Dict[str, int]     # { word: freq }
+VocabP = Dict[str, float]   # { word: prob }
+VocabI = Dict[str, int]     # { word: index }
 
 def load_vocab(fp:str) -> Vocab:
   with open(fp, encoding='utf-8') as fh:
@@ -52,8 +53,7 @@ def truncate_vocab(voc:Vocab, min_freq:int=3) -> Vocab:
 
 def vocab_to_vocabp(voc:Vocab) -> VocabP:
   cnt = sum(voc.values())
-  for v in voc: voc[v] /= cnt
-  return voc
+  return {v: c / cnt for v, c in voc.items()}
 
 def filter_vocab(voc:Vocab, predicate:Callable[[str], bool]):
   return {v: c for v, c in voc.items() if predicate(v)}
@@ -96,6 +96,7 @@ TokenizedS = List[str]
 TokenizedP = List[Tuple[float, List[str]]]
 Tokenized = Union[TokenizedS, TokenizedP]
 Tokenizer = Callable[[str, Optional[int], Optional[int]], Tokenized]
+PreprocessPack = Tuple[Tokenizer, Vocab, VocabI, int]   # PAD_ID:int
 
 def _mk_trie(vocab:VocabP) -> Trie:
   ''' build a trie tree '''

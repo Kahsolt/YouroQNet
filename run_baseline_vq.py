@@ -4,6 +4,7 @@
 
 import random
 from pathlib import Path
+from pprint import pformat
 from argparse import ArgumentParser
 import warnings ; warnings.simplefilter("ignore")
 
@@ -46,7 +47,7 @@ if 'pyvqnet':
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 
 from utils import *
-from mk_vocab import make_tokenizer, load_vocab, truncate_vocab, Vocab
+from mk_vocab import make_tokenizer, load_vocab, truncate_vocab, Vocab, VocabI, PreprocessPack
 
 
 class TextModel(Module):
@@ -221,37 +222,52 @@ def get_model(args) -> Module:
 
   raise ValueError(name)
 
-def gen_dataloader(args, split:str, vocab:Vocab) -> Dataloader:
-  def make_mappings(symbols:List[str], pad:str=None) -> Tuple[Dict[str, int], Dict[int, str]]:
-    if pad is not None: syms = [pad] + symbols
-    syms.sort()
-    word2id = { v: i for i, v in enumerate(syms) }
-    id2word = { i: v for i, v in enumerate(syms) }
-    return word2id, id2word
+def get_vocab(args) -> Vocab:
+  analyzer: str = args.analyzer
+  analyzers = []
+  if analyzer.endswith('+'):
+    analyzers.append('char')
+    analyzer = analyzer[:-1]
+  analyzers.append(analyzer)
 
-  symbols = sorted(vocab.keys())
-  word2id, id2word = make_mappings(symbols, args.pad)
+  vocab = {}
+  for analyzer in analyzers:
+    vocab.update(load_vocab(LOG_PATH / analyzer / 'vocab.txt'))
+  if args.min_freq > 0:
+    vocab = truncate_vocab(vocab, args.min_freq)
+  return vocab
+
+def get_word2id(args, symbols:List[str]) -> VocabI:
+  if args.pad is not None: syms = [args.pad] + symbols
+  syms.sort()
+  word2id = { v: i for i, v in enumerate(syms) }
+  return word2id
+
+def get_preprocessor_pack(args, vocab:Vocab) -> PreprocessPack:
   tokenizer = make_tokenizer(vocab) if 'gram' in args.analyzer else list
+  aligner = lambda x: align_words(x, args.length, args.pad)
+  word2id = get_word2id(args, list(vocab.keys()))
+  PAD_ID = word2id.get(args.pad, -1)
+  return tokenizer, aligner, word2id, PAD_ID
 
-  shuffle = split == 'train'
-  T, Y = load_dataset(split)
+def gen_dataloader(args, dataset:Dataset, vocab:Vocab, shuffle:bool=False) -> Dataloader:
+  preproc_pack = get_preprocessor_pack(args, vocab)
 
   def iter_by_batch() -> Tuple[NDArray, NDArray]:
-    nonlocal args, shuffle, T, Y, tokenizer, word2id
+    nonlocal args, dataset, preproc_pack, shuffle
 
+    T, Y = dataset
     N = len(Y)
     indexes = list(range(N))
     if shuffle: random.shuffle(indexes) 
-    PAD_ID = word2id.get(args.pad, -1)
-    aligner = lambda x: align_words(x, args.length, args.pad)
 
     for i in range(0, N, args.batch_size):
       T_batch, Y_batch = [], []
       for j in range(args.batch_size):
         if i + j >= N: break
         idx = indexes[i + j]
-        T_batch.append(np.asarray([word2id.get(w, PAD_ID) for w in aligner(tokenizer(T[idx]))]))
-        Y_batch.append(Y[idx])    # use integer label
+        T_batch.append(sent_to_ids (T[idx], preproc_pack))
+        Y_batch.append(id_to_onehot(Y[idx], args.n_class))
 
       if len(T_batch) == args.batch_size:
         yield [np.stack(e, axis=0).astype(np.int32) for e in [T_batch, Y_batch]]
@@ -327,12 +343,13 @@ def train(args, model:Module, optimizer, creterion, train_loader:Dataloader, tes
 
       step += 1
 
-      if step % 50 == 0:
+      if step % args.log_interval == 0:
         losses.append(loss / tot)
         accs  .append(ok   / tot)
         logger.info(f'>> [Step {step}] loss: {losses[-1]}, acc: {accs[-1]:.3%}')
         tot, ok, loss = 0, 0, 0.0
 
+      if step % args.test_interval == 0:
         model.eval()
         tloss, tacc = valid(args, model, creterion, test_loader, logger)
         test_losses.append(tloss)
@@ -351,38 +368,26 @@ def go_train(args):
   logger = get_logger(out_dp / 'run.log', mode='w')
 
   # symbols (codebook)
-  def parse_analyzer(analyzer:str) -> List[str]:
-    analyzers = []
-    if analyzer.endswith('+'):
-      analyzers.append('char')
-      analyzer = analyzer[:-1]
-    analyzers.append(analyzer)
-    return analyzers
-  def unify_vocab(analyzers:List[str], min_freq:int=3) -> Vocab:
-    vocab_uni = {}
-    for analyzer in analyzers:
-      vocab_uni.update(load_vocab(LOG_PATH / analyzer / 'vocab.txt'))
-    if min_freq: vocab_uni = truncate_vocab(vocab_uni, min_freq)
-    return vocab_uni
-
-  analyzers = parse_analyzer(args.analyzer)
-  vocab = unify_vocab(analyzers, args.min_freq)
+  vocab = get_vocab(args)
   args.n_vocab = len(vocab) + 1  # <PAD>
 
   # data
-  train_loader = gen_dataloader(args, 'train', vocab)
-  test_loader  = gen_dataloader(args, 'test',  vocab)
-  valid_loader = gen_dataloader(args, 'valid', vocab)
+  train_loader = gen_dataloader(args, load_dataset('train'), vocab, shuffle=True)
+  test_loader  = gen_dataloader(args, load_dataset('test'),  vocab)
+  valid_loader = gen_dataloader(args, load_dataset('valid'), vocab)
 
   # model & optimizer & loss
   model = get_model(args)
+  creterion = CrossEntropyLoss()    # creterion accepts integer label as truth
   args.param_cnt = sum([p.size for p in model.parameters() if p.requires_grad])
   
-  optimizer = Adam(model.parameters(), args.lr)
-  creterion = CrossEntropyLoss()    # creterion accepts integer label as truth
+  if args.optim == 'SGD':
+    optimizer = SGD(model.parameters(), lr=args.lr, momentum=0.9)
+  elif args.optim == 'Adam':
+    optimizer = Adam(model.parameters(), lr=args.lr)
 
   # info
-  logger.info(f'hparam: {vars(args)}')
+  logger.info(f'hparam: {pformat(vars(args))}')
 
   # train
   losses_and_accs = train(args, model, optimizer, creterion, train_loader, test_loader, logger)
@@ -424,8 +429,9 @@ def go_eval(args):
 
 def get_args():
   parser = ArgumentParser()
-  parser.add_argument('-L', '--analyzer', choices=ANALYZERS, help='tokenize level')
-  parser.add_argument('-M', '--model',                       help='model config string pattern')
+  parser.add_argument('-L', '--analyzer',   default='kgram+', choices=ANALYZERS, help='tokenize level')
+  parser.add_argument('-M', '--model',      required=True,    help='model config string pattern')
+  parser.add_argument('-O', '--optim',      default='SGD',    choices=['SGD', 'Adam'],  help='optimizer')
   parser.add_argument('-N', '--length',     default=32,   type=int, help='model input length (in tokens)')
   parser.add_argument('-P', '--pad',        default='\x00',         help='model input pad')
   parser.add_argument('-D', '--embed_dim',  default=32,   type=int, help='model embed depth')
@@ -434,6 +440,8 @@ def get_args():
   parser.add_argument('--lr',               default=1e-3, type=float)
   parser.add_argument('--min_freq',         default=5,    type=int, help='final vocab for embedding')
   parser.add_argument('--n_class',    default=N_CLASS,    type=int, help='num of class')
+  parser.add_argument('--log_interval',     default=50,  type=int, help='log & reset loss/acc')
+  parser.add_argument('--test_interval',    default=200, type=int, help='test on valid split')
   parser.add_argument('--eval', action='store_true', help='compare result scores')
   return parser.parse_args()
 

@@ -113,18 +113,22 @@ def timer(fn):
     return r
   return wrapper
 
+def json_load(fp:str):
+  print(f'load hparam from {fp}')
+  with open(fp, 'r', encoding='utf-8') as fh:
+    return json.load(fh)
+
 def json_dump(data:Any, fp:str):
+  print(f'dump hparam to {fp}')
   with open(fp, 'w', encoding='utf-8') as fh:
     json.dump(data, fh, indent=2, ensure_ascii=False)
 
-def json_load(fp:str):
-  with open(fp, 'w', encoding='utf-8') as fh:
-    return json.load(fh)
-
 def load_ckpt(model:Module, fp:str):
+  print(f'load weights from {fp}')
   model.load_state_dict(load_parameters(fp))
 
 def save_ckpt(model:Module, fp:str):
+  print(f'save weights to {fp}')
   save_parameters(model.state_dict(), fp)
 
 ''' text '''
@@ -204,6 +208,13 @@ def align_words(words:List[str], n_limit:int, pad:str='') -> List[str]:
   if nlen  < n_limit: return words + [pad] * (n_limit - nlen)
   cp = random.randrange(nlen - n_limit)
   return words[cp : cp + n_limit]
+
+def sent_to_ids(sent:str, packed:'PreprocessPack') -> NDArray:
+  tokenizer, aligner, word2id, PAD_ID = packed
+  return np.asarray([word2id.get(w, PAD_ID) for w in aligner(tokenizer(sent))])
+
+def id_to_onehot(label:int, n_class:int=None) -> NDArray:
+  return np.eye(n_class)[label]
 
 ''' dataset '''
 

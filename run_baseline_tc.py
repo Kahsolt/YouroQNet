@@ -4,22 +4,23 @@
 
 from run_baseline_vq import *
 
-import torch
-from torch.nn import Module
-from torch.nn import Conv1d, Conv2d, MaxPool1d, MaxPool2d, Embedding, Linear, Dropout, ReLU
-from torch.nn import CrossEntropyLoss
-from torch.optim import Adam
-
 # NOTE: VQNet impl of TextCNN does not work, we use torch instead
 
-to_tensor = lambda *xs: tuple(torch.from_numpy(x).long() for x in xs) if len(xs) > 1 else torch.from_numpy(xs[0])
-argmax    = lambda x: x.argmax(dim=-1)
+if 'torch':
+  import torch
+  from torch.nn import Module
+  from torch.nn import Conv1d, Conv2d, MaxPool1d, MaxPool2d, Embedding, Linear, Dropout, ReLU
+  from torch.nn import CrossEntropyLoss
+  from torch.optim import Adam
 
-def load_ckpt(model:Module, fp:str):
-  model.load_state_dict(torch.load(fp))
+  to_tensor = lambda *xs: tuple(torch.from_numpy(x).long() for x in xs) if len(xs) > 1 else torch.from_numpy(xs[0])
+  argmax    = lambda x: x.argmax(dim=-1)
 
-def save_ckpt(model:Module, fp:str):
-  torch.save(model.state_dict(), fp)
+  def load_ckpt(model:Module, fp:str):
+    model.load_state_dict(torch.load(fp))
+
+  def save_ckpt(model:Module, fp:str):
+    torch.save(model.state_dict(), fp)
 
 
 class TextModel(Module):
@@ -33,7 +34,6 @@ class TextModel(Module):
     if hasattr(args, 'agg'):
       if args.agg == 'avg': self.agg = torch.mean
       if args.agg == 'max': self.agg = lambda *args: torch.max(*args)[0]
-
 
 class TextCNN(TextModel):
 
@@ -175,12 +175,13 @@ def train(args, model:Module, optimizer, creterion, train_loader:Dataloader, tes
 
       step += 1
 
-      if step % 50 == 0:
+      if step % args.log_interval == 0:
         losses.append(loss / tot)
         accs  .append(ok   / tot)
         logger.info(f'>> [Step {step}] loss: {losses[-1]}, acc: {accs[-1]:.3%}')
         tot, ok, loss = 0, 0, 0.0
 
+      if step % args.test_interval == 0:
         model.eval()
         tloss, tacc = valid(args, model, creterion, test_loader, logger)
         test_losses.append(tloss)
@@ -199,38 +200,26 @@ def go_train(args):
   logger = get_logger(out_dp / 'run.log', mode='w')
 
   # symbols (codebook)
-  def parse_analyzer(analyzer:str) -> List[str]:
-    analyzers = []
-    if analyzer.endswith('+'):
-      analyzers.append('char')
-      analyzer = analyzer[:-1]
-    analyzers.append(analyzer)
-    return analyzers
-  def unify_vocab(analyzers:List[str], min_freq:int=3) -> Vocab:
-    vocab_uni = {}
-    for analyzer in analyzers:
-      vocab_uni.update(load_vocab(LOG_PATH / analyzer / 'vocab.txt'))
-    if min_freq: vocab_uni = truncate_vocab(vocab_uni, min_freq)
-    return vocab_uni
-
-  analyzers = parse_analyzer(args.analyzer)
-  vocab = unify_vocab(analyzers, args.min_freq)
+  vocab = get_vocab(args)
   args.n_vocab = len(vocab) + 1  # <PAD>
 
   # data
-  train_loader = gen_dataloader(args, 'train', vocab)
-  test_loader  = gen_dataloader(args, 'test',  vocab)
-  valid_loader = gen_dataloader(args, 'valid', vocab)
+  train_loader = gen_dataloader(args, load_dataset('train'), vocab, shuffle=True)
+  test_loader  = gen_dataloader(args, load_dataset('test'),  vocab)
+  valid_loader = gen_dataloader(args, load_dataset('valid'), vocab)
 
   # model & optimizer & loss
   model = get_model(args)
+  creterion = CrossEntropyLoss()    # creterion accepts integer label as truth
   args.param_cnt = sum([p.numel() for p in model.parameters() if p.requires_grad])
   
-  optimizer = Adam(model.parameters(), args.lr)
-  creterion = CrossEntropyLoss()    # creterion accepts integer label as truth
+  if args.optim == 'SGD':
+    optimizer = SGD(model.parameters(), lr=args.lr, momentum=0.9)
+  elif args.optim == 'Adam':
+    optimizer = Adam(model.parameters(), lr=args.lr)
 
   # info
-  logger.info(f'hparam: {vars(args)}')
+  logger.info(f'hparam: {pformat(vars(args))}')
 
   # train
   losses_and_accs = train(args, model, optimizer, creterion, train_loader, test_loader, logger)

@@ -4,7 +4,6 @@
 
 from pprint import pformat
 from argparse import ArgumentParser
-from traceback import print_exc
 import warnings ; warnings.simplefilter("ignore")
 
 if 'pyvqnet & pyqpanda':
@@ -63,7 +62,8 @@ if 'pyvqnet & pyqpanda':
 import numpy as np
 
 from utils import *
-from mk_vocab import make_tokenizer, load_vocab, truncate_vocab, Vocab, Tokenizer
+from mk_vocab import Vocab, Tokenizer, make_tokenizer
+from run_baseline_vq import get_vocab, get_word2id, gen_dataloader
 
 class LogOnce:
   export_circuit = True
@@ -251,54 +251,6 @@ def get_embedding(args, param) -> NDArray:
   phi = param[:args.n_param_t]
   return phi.reshape(args.n_vocab, -1)   # [K, D=n_repeat*n_gate_param]
 
-def get_vocab(args) -> Vocab:
-  analyzer: str = args.analyzer
-  analyzers = []
-  if analyzer.endswith('+'):
-    analyzers.append('char')
-    analyzer = analyzer[:-1]
-  analyzers.append(analyzer)
-
-  vocab = {}
-  for analyzer in analyzers:
-    vocab.update(load_vocab(LOG_PATH / analyzer / 'vocab.txt'))
-  if args.min_freq > 0:
-    vocab = truncate_vocab(vocab, args.min_freq)
-  return vocab
-
-def get_word2id(args, symbols:List[str]) -> Vocab:
-  if args.pad is not None: syms = [args.pad] + symbols
-  syms.sort()
-  word2id = { v: i for i, v in enumerate(syms) }
-  return word2id
-
-def gen_dataloader(args, dataset:Dataset, vocab:Vocab, shuffle:bool=False) -> Dataloader:
-  T, Y = dataset
-  word2id = get_word2id(args, list(vocab.keys()))
-  tokenizer = make_tokenizer(vocab) if 'gram' in args.analyzer else list
-
-  def iter_by_batch() -> Tuple[NDArray, NDArray]:
-    nonlocal args, shuffle, T, Y, tokenizer, word2id
-
-    N = len(Y)
-    indexes = list(range(N))
-    if shuffle: random.shuffle(indexes) 
-    PAD_ID = word2id.get(args.pad, -1)
-    aligner = lambda x: align_words(x, args.length, args.pad)
-
-    for i in range(0, N, args.batch_size):
-      T_batch, Y_batch = [], []
-      for j in range(args.batch_size):
-        if i + j >= N: break
-        idx = indexes[i + j]
-        T_batch.append(np.asarray([word2id.get(w, PAD_ID) for w in aligner(tokenizer(T[idx]))]))
-        Y_batch.append(np.eye(args.n_class)[Y[idx]])    # make onehot
-
-      if len(T_batch) == args.batch_size:
-        yield [np.stack(e, axis=0).astype(np.int32) for e in [T_batch, Y_batch]]
-  
-  return iter_by_batch    # return a DataLoader generator
-
 
 def test(args, model:QModel, creterion, test_loader:Dataloader, logger:Logger) -> Metrics:
   Y_true, Y_pred = [], []
@@ -334,7 +286,7 @@ def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, tes
   test_losses, test_accs, test_f1s = [], [], []
   tot, ok, loss = 0, 0, 0.0
   for e in range(args.epochs):
-    #logger.info(f'[Epoch {e}/{args.epochs}]')
+    logger.info(f'[Epoch {e}/{args.epochs}]')
 
     model.train()
     for X_np, Y_np in train_loader():
@@ -353,10 +305,10 @@ def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, tes
 
       step += 1
 
-      if step % args.log_interval == 0:
+      if step % args.slog_interval == 0:
         logger.info(f'>> [Step {step}] loss: {loss / tot}, acc: {ok / tot:.3%}')
       
-      if step % args.log_reset_interval == 0:
+      if step % args.log_interval == 0:
         losses.append(loss / tot)
         accs  .append(ok   / tot)
         logger.info(f'>> [Step {step}] loss: {losses[-1]}, acc: {accs[-1]:.3%}')
@@ -390,22 +342,29 @@ def infer(args, model:QModel, sent:str, tokenizer:Tokenizer, word2id:Vocab) -> V
   return votes
 
 
-def go_train(args):
+def go_train(args, user_vocab_data:Tuple[Vocab, Dataset, Dataset]=None, name_suffix:str=''):
   # configs
-  args.expname = f'{args.analyzer}_{args.model}'
-  out_dp: Path = LOG_PATH / args.analyzer / args.model
+  args.expname = f'{args.analyzer}_{args.model}{name_suffix}'
+  out_dp: Path = LOG_PATH / args.analyzer / f'{args.model}{name_suffix}'
   out_dp.mkdir(exist_ok=True, parents=True)
   args.out_dp = str(out_dp)
   logger = get_logger(out_dp / 'run.log', mode='w')
 
   # symbols (codebook)
-  vocab = get_vocab(args)
+  if user_vocab_data:
+    vocab, trainset, testset = user_vocab_data
+  else:
+    vocab = get_vocab(args)
   args.n_vocab = len(vocab) + 1  # <PAD>
 
   # data
-  train_loader = gen_dataloader(args, load_dataset('train'), vocab, shuffle=True)
-  test_loader  = gen_dataloader(args, load_dataset('test'),  vocab)
-  valid_loader = gen_dataloader(args, load_dataset('valid'), vocab)
+  if user_vocab_data:
+    train_loader = gen_dataloader(args, trainset, vocab, shuffle=True)
+    test_loader  = gen_dataloader(args, testset,  vocab)
+  else:
+    train_loader = gen_dataloader(args, load_dataset('train'), vocab, shuffle=True)
+    test_loader  = gen_dataloader(args, load_dataset('test'),  vocab)
+    valid_loader = gen_dataloader(args, load_dataset('valid'), vocab)
 
   # model & optimizer & loss
   model, creterion = get_model_and_creterion(args)    # creterion accepts onehot label as truth
@@ -433,6 +392,7 @@ def go_train(args):
   result = { 'hparam': vars(args), 'scores': {} }
   for split in SPLITS:
     datat_loader = locals().get(f'{split}_loader')
+    if datat_loader is None: continue     # ignore if valid_loader not exists
     loss, acc, f1 = test(args, model, creterion, datat_loader, logger)
     result['scores'][split] = {
       'loss': loss,
@@ -477,16 +437,22 @@ def go_infer(args, texts:List[str]=None) -> Union[Votes, Inferer]:
 
 
 def go_inspect(args):
-  out_dp = Path(args.out_dp)
+  # configs
+  out_dp: Path = LOG_PATH / args.analyzer / args.model
+  assert out_dp.exists(), 'you must train this model before you can infer from :('
+
+  # hparam
   hparam = json_load(out_dp / TASK_FILE)['hparam']
   for k, v in hparam.items():
     if not hasattr(args, k):
       setattr(args, k, v)
 
-  param = load_parameters(out_dp / MODEL_FILE)
-  breakpoint()
+  # embed
+  ckpt = load_parameters(out_dp / MODEL_FILE)
+  param = ckpt['m_para'].to_numpy()
+  print('param.shape:', param.shape)
   embed = get_embedding(args, param)
-
+  print('embed.shape:', embed.shape)
 
 
 def get_args():
@@ -498,18 +464,18 @@ def get_args():
   parser.add_argument('-O', '--optim',      default='SGD',    choices=['SGD', 'Adam'],  help='optimizer')
   parser.add_argument('-G', '--grad_meth',  default='fd',     choices=GRAD_METH.keys(), help='grad method')
   parser.add_argument(      '--grad_dx',    default=0.01,     type=float, help='step size for finite_diff')
-  parser.add_argument('-P', '--pad',        default='\x00',         help='model input pad')
-  parser.add_argument('-N', '--length',     default=3,    type=int, help='model input length (in tokens)')
-  parser.add_argument('-D', '--repeat',     default=2,    type=int, help='circuit n_repeat, effecting embed depth')
-  parser.add_argument('-E', '--epochs',     default=10,   type=int)
-  parser.add_argument('-B', '--batch_size', default=4,    type=int)
-  parser.add_argument('--lr',               default=0.1,  type=float)
-  parser.add_argument('--min_freq',         default=5,    type=int, help='min_freq for final embedding vocab')
-  parser.add_argument('--n_class',    default=N_CLASS,    type=int, help='num of class')
-  parser.add_argument('--n_vote',           default=5,    type=int, help='max number of voters at inference time')
-  parser.add_argument('--log_interval',       default=10,  type=int)
-  parser.add_argument('--log_reset_interval', default=50,  type=int)
-  parser.add_argument('--test_interval',      default=200, type=int)
+  parser.add_argument('-P', '--pad',        default='\x00',        help='model input pad')
+  parser.add_argument('-N', '--length',     default=3,   type=int, help='model input length (in tokens)')
+  parser.add_argument('-D', '--repeat',     default=2,   type=int, help='circuit n_repeat, effecting embed depth')
+  parser.add_argument('-E', '--epochs',     default=10,  type=int)
+  parser.add_argument('-B', '--batch_size', default=4,   type=int)
+  parser.add_argument('--lr',               default=0.1, type=float)
+  parser.add_argument('--min_freq',         default=5,   type=int, help='min_freq for final embedding vocab')
+  parser.add_argument('--n_class',    default=N_CLASS,   type=int, help='num of class')
+  parser.add_argument('--n_vote',           default=5,   type=int, help='max number of voters at inference time')
+  parser.add_argument('--slog_interval',    default=10,  type=int, help='log loss/acc')
+  parser.add_argument('--log_interval',     default=50,  type=int, help='log & reset loss/acc')
+  parser.add_argument('--test_interval',    default=200, type=int, help='test on valid split')
   parser.add_argument('--inspect', action='store_true', help='inspect into the learned embeddings')
   return parser.parse_args()
 

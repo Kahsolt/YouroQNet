@@ -3,8 +3,9 @@
 # Create Time: 2023/05/15 
 
 from run_quantum import *
+from run_baseline_vq import get_preprocessor_pack
 
-# NOTE: the mini YouroQNet for conceptual verification
+# NOTE: the toy dataset on the minimal YouroQNet for conceptual verification
 
 vocab = {
   '我': 2,
@@ -23,7 +24,7 @@ train_data = [
   (1, '讨厌西瓜'),
   (1, '你讨厌苹果'),
 ]
-valid_data = [
+test_data = [
   (0, '喜欢'),
   (0, '喜欢喜欢我'),
   (0, '苹果爱'),
@@ -34,21 +35,20 @@ valid_data = [
 
 
 def preview_dataset(args):
-  tokenizer = make_tokenizer(vocab)
-  word2id = get_word2id(args, list(vocab.keys()))
-  PAD_ID = word2id.get(args.pad, -1)
-  aligner = lambda x: align_words(x, args.length, args.pad)
+  ''' see run_quantum.gen_dataloader() '''
+  tokenizer, aligner, word2id, PAD_ID = get_preprocessor_pack(args, vocab)
 
   def preprocess(data):
-    X, Y = [], []
+    T_batch, Y_batch = [], []
     for lbl, txt in data:
-      Y.append(np.eye(args.n_class)[lbl])
-      X.append(np.asarray([word2id.get(w, PAD_ID) for w in aligner(tokenizer(txt))]))
-    return [np.stack(e, axis=0).astype(np.int32) for e in [X, Y]]
+      T_batch.append(np.asarray([word2id.get(w, PAD_ID) for w in aligner(tokenizer(txt))]))
+      Y_batch.append(np.eye(args.n_class)[lbl])
+    return [np.stack(e, axis=0).astype(np.int32) for e in [T_batch, Y_batch]]
 
   trainset = preprocess(train_data)
-  validset = preprocess(valid_data)
+  validset = preprocess(test_data)
 
+  print('=' * 72)
   print('word2id:')
   print(word2id)
   print('trainset:')
@@ -57,47 +57,21 @@ def preview_dataset(args):
   print('validset:')
   print(validset[0])
   print(validset[1])
+  print('=' * 72)
 
 
-def go_train(args):
-  # logger
-  logger = logging.getLogger()
-  logger.setLevel(logging.INFO)
-  h = logging.StreamHandler()
-  h.setFormatter(fmt=logging.Formatter('%(message)s'))
-  logger.addHandler(h)
+def go_train_proxy(args):
+  global vocab
 
-  # symbols (codebook)
-  args.n_vocab = len(vocab) + 1  # <PAD>
-
-  # data
   trainset = [e[1] for e in train_data], [e[0] for e in train_data]
-  validset = [e[1] for e in valid_data], [e[0] for e in valid_data]
-  train_loader = gen_dataloader(args, trainset, vocab, shuffle=True)
-  valid_loader = gen_dataloader(args, validset, vocab)
-
-  # model & optimizer & loss
-  model, creterion = get_model_and_creterion(args)
-  args.param_cnt = sum([p.size for p in model.parameters() if p.requires_grad])
-
-  print(f'hparam: {pformat(vars(args))}')
-
-  if args.optim == 'SGD':
-    optimizer = SGD(model.parameters(), lr=args.lr, momentum=0.9)
-  elif args.optim == 'Adam':
-    optimizer = Adam(model.parameters(), lr=args.lr)
-
-  # train
-  losses_and_accs = train(args, model, optimizer, creterion, train_loader, valid_loader, logger)
-  
-  # plot
-  plot_loss_and_acc(losses_and_accs, TMP_PATH / 'vis_youroqnet_toy.png', title='YouroQNet toy')
+  testset  = [e[1] for e in test_data],  [e[0] for e in test_data]
+  go_train(args, (vocab, trainset, testset), name_suffix='_toy')
 
 
 if __name__ == '__main__':
   args = get_args()
   # tunable
-  args.epochs = 150
+  args.epochs = 100
   args.batch_size = 1
   args.lr = 0.01
   args.grad_meth = 'fd'
@@ -109,9 +83,9 @@ if __name__ == '__main__':
   args.min_freq = 1
   args.n_class = 2
   args.n_vote = 1
-  args.log_interval = 10
-  args.log_reset_interval = 50
+  args.slog_interval = 10
+  args.log_interval  = 50
   args.test_interval = 50
   
   preview_dataset(args)
-  go_train(args)
+  go_train_proxy(args)
