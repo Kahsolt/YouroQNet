@@ -244,7 +244,7 @@ def get_word2id(args, symbols:List[str]) -> VocabI:
   return word2id
 
 def get_preprocessor_pack(args, vocab:Vocab) -> PreprocessPack:
-  tokenizer = make_tokenizer(vocab) if 'gram' in args.analyzer else list
+  tokenizer = list if args.analyzer == 'char' else make_tokenizer(vocab) 
   aligner = lambda x: align_words(x, args.length, args.pad)
   word2id = get_word2id(args, list(vocab.keys()))
   PAD_ID = word2id.get(args.pad, -1)

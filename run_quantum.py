@@ -402,9 +402,9 @@ def go_train(args, user_vocab_data:Tuple[Vocab, Dataset, Dataset]=None, name_suf
   json_dump(result, out_dp / TASK_FILE)
 
 
-def go_infer(args, texts:List[str]=None) -> Union[Votes, Inferer]:
+def go_infer(args, texts:List[str]=None, name_suffix:str='') -> Union[Votes, Inferer]:
   # configs
-  out_dp: Path = LOG_PATH / args.analyzer / args.model
+  out_dp: Path = LOG_PATH / args.analyzer / f'{args.model}{name_suffix}'
   assert out_dp.exists(), 'you must train this model before you can infer from :('
   
   # model
@@ -413,9 +413,11 @@ def go_infer(args, texts:List[str]=None) -> Union[Votes, Inferer]:
 
   # symbols (codebook)
   vocab = get_vocab(args)
-  word2id = get_word2id(args, list(vocab.keys()))
-  tokenizer = make_tokenizer(vocab) if 'gram' in args.analyzer else list
   args.n_vocab = len(vocab) + 1  # <PAD>
+
+  # preprocessor
+  tokenizer = make_tokenizer(vocab) if 'gram' in args.analyzer else list
+  word2id = get_word2id(args, list(vocab.keys()))
 
   # make a inferer callable if no text given
   if texts is None:
@@ -436,9 +438,9 @@ def go_infer(args, texts:List[str]=None) -> Union[Votes, Inferer]:
   return preds
 
 
-def go_inspect(args):
+def go_inspect(args, name_suffix:str=''):
   # configs
-  out_dp: Path = LOG_PATH / args.analyzer / args.model
+  out_dp: Path = LOG_PATH / args.analyzer / f'{args.model}{name_suffix}'
   assert out_dp.exists(), 'you must train this model before you can infer from :('
 
   # hparam
@@ -453,6 +455,19 @@ def go_inspect(args):
   print('param.shape:', param.shape)
   embed = get_embedding(args, param)
   print('embed.shape:', embed.shape)
+
+  # plot
+  plt.clf()
+  plt.subplot(121)
+  plt.imshow(embed, cmap='bwr')
+  plt.colorbar(orientation='vertical', location='right')
+  plt.subplot(122)
+  plt.imshow(2*np.arctan(embed), cmap='bwr')
+  plt.colorbar(orientation='vertical', location='right')
+  plt.suptitle(f'embed: {embed.shape}')
+  fp = out_dp / 'embed.png'
+  plt.savefig(fp, dpi=600)
+  print(f'savefig to {fp}')
 
 
 def get_args():

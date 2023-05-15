@@ -1,7 +1,6 @@
 7z a -t7z ^
   -mx9 ^
   -xr!*.7z ^
-  -xr!mk_7z.cmd ^
   -xr!ref\*.pptx ^
   -xr!ref\*.*.pdf ^
   -xr!repo\ ^

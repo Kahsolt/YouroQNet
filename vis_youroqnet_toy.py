@@ -7,14 +7,15 @@ from run_baseline_vq import get_preprocessor_pack
 
 # NOTE: the toy dataset on the minimal YouroQNet for conceptual verification
 
-vocab = {
-  '我': 2,
-  '你': 3,
-  '爱': 2,
-  '喜欢': 1,
-  '讨厌': 3,
-  '苹果': 2,
-  '西瓜': 2,
+SUFFIX = '_toy'
+
+words = {
+  # positive (leading to class 0)
+  '爱', '喜欢',
+  # negetive (leading to class 1)
+  '恨', '讨厌',
+  # neutral
+  '我', '你', '苹果', '西瓜',
 }
 train_data = [
   (0, '我爱你'),
@@ -32,11 +33,13 @@ test_data = [
   (1, '讨厌你'),
   (1, '讨厌讨厌'),
 ]
+vocab = { w: sum(txt.count(w) for _, txt in train_data) for w in words }
 
 
 def preview_dataset(args):
   ''' see run_quantum.gen_dataloader() '''
   tokenizer, aligner, word2id, PAD_ID = get_preprocessor_pack(args, vocab)
+  id2word = {v: k for k, v in word2id.items()}
 
   def preprocess(data):
     T_batch, Y_batch = [], []
@@ -49,8 +52,9 @@ def preview_dataset(args):
   validset = preprocess(test_data)
 
   print('=' * 72)
-  print('word2id:')
-  print(word2id)
+  print('vocab:', vocab)
+  print('word2id:', word2id)
+  print('id2word:', id2word)
   print('trainset:')
   print(trainset[0])
   print(trainset[1])
@@ -65,27 +69,36 @@ def go_train_proxy(args):
 
   trainset = [e[1] for e in train_data], [e[0] for e in train_data]
   testset  = [e[1] for e in test_data],  [e[0] for e in test_data]
-  go_train(args, (vocab, trainset, testset), name_suffix='_toy')
+  go_train(args, (vocab, trainset, testset), name_suffix=SUFFIX)
+
+
+def go_inspect_proxy(args):
+  go_inspect(args, name_suffix=SUFFIX)
 
 
 if __name__ == '__main__':
   args = get_args()
   # tunable
-  args.epochs = 100
+  args.epochs     = 100
   args.batch_size = 1
-  args.lr = 0.01
-  args.grad_meth = 'fd'
-  args.grad_dx = 0.01
+  args.lr         = 0.01
+  args.grad_meth  = 'fd'
+  args.grad_dx    = 0.01
 
   # fixed
-  args.model = 'Youro'
-  args.length = 3
-  args.min_freq = 1
-  args.n_class = 2
-  args.n_vote = 1
+  args.analyzer      = 'user'
+  args.model         = 'Youro'
+  args.length        = 3
+  args.min_freq      = 1
+  args.n_class       = 2
+  args.n_vote        = 1
   args.slog_interval = 10
   args.log_interval  = 50
   args.test_interval = 50
   
+  if args.inspect:
+    go_inspect_proxy(args)
+    exit(0)
+
   preview_dataset(args)
   go_train_proxy(args)

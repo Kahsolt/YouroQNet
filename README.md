@@ -1,6 +1,6 @@
-# VQNet-text-sentiment-clf
+# YouroQNet: Quantum Text Classification with Context Memory
 
-    A toy quantum text sentiment classifier using pyVQNet and pyQPanda
+    Official implementaion of YouroQNet, a toyish quantum text classifier implemented with pyVQNet and pyQPanda
 
 ----
 
@@ -21,8 +21,14 @@ And, code repo for the qualifying stage is here: [第二届“司南杯”初赛
 
 - `python answer.py` for preprocess & train
 - `python check.py` for evaluate
+
+⚪ for quick peek of YouroQNet components
+
 - `python vis_tokenizer.py` for adaptive k-gram tokeinzer interactive demo
 - `python vis_youroqnet.py` for YouroQNet interactive demo
+  - you can run the toy version first of all 👇
+    - `python vis_youroqnet_toy.py`
+    - `python vis_youroqnet_toy.py --inspect`
 
 ⚪ for full development
 
@@ -36,6 +42,13 @@ And, code repo for the qualifying stage is here: [第二届“司南杯”初赛
 - `python vis_project.py` to see 3d data projection (you will understand what the fuck this dataset is 👿)
 - `run_baseline.cmd` to run classic models
 - `run_quantum.cmd` to run quantum models
+
+⚪ core idea & contributions
+
+- adaptive k-gram tokenizer (see [mk_vocab.py](mk_vocab.py), interactivate demo [vis_tokenizer.py](vis_tokenizer.py))
+- YouroQNet for text clf (see [run_quantum.py](run_quantum.py), interactivate demo [vis_youroqnet.py](vis_youroqnet.py))
+
+ℹ see our PPT [YouroQNet.pdf](ref/YouroQNet.pdf) for more conceptual understanding 🎉
 
 
 #### Dataset
@@ -64,17 +77,11 @@ A subset from [simplifyweibo_4_moods](https://github.com/SophonPlus/ChineseNlpCo
   - [x] sklearn
   - [x] vqnet-classical
 - [ ] quantum models
-  - [ ] quantum embedding
+  - [x] quantum embedding
   - [ ] model route on different length
-  - [ ] multi to binary clf
+  - [x] multi to binary clf
   - [ ] contrastive learning
   - [ ] learn the difference
-
-
-### Core idea & Contributions
-
-- adaptive k-gram tokenizer (see [mk_vocab.py](mk_vocab.py), interactivate demo [vis_tokenizer.py](vis_tokenizer.py))
-- YouroQNet for text clf (see [run_quantum.py](run_quantum.py), interactivate demo [vis_quantum.py](vis_quantum.py))
 
 
 ### Project layout
@@ -82,9 +89,23 @@ A subset from [simplifyweibo_4_moods](https://github.com/SophonPlus/ChineseNlpCo
 ```python
 # meterials
 ref/                # thesis for dev
-repo/               # git repo for dev
+  Question-ML.png   # problem sheet
+  YouroQNet.pdf     # solution PPT (YouroQNet)
+  init_thesis.cmd   # thesis donwloader
+repo/               # git repos for research
+  init_repos.cmd    # git repo cloner
+  update_repos.cmd
 data/               # dataset
+  simplifyweibo_4_moods.csv   # raw dataset (manually download)
+  train|test.csv    # context dataset
+  *_cleaned.csv
+  *_tokenized.txt
+  cc.zh.300.bin     # FastText pretrained word embedding (auto downloaded)
 log/                # outputs
+  <analyzer>/       # aka. vocab
+    <feature>/      # sklearn models
+    <model>/        # vqnet/torch models
+tmp/                # generated intermediate results for debug
 
 # contest related
 answer.py           # run script for preprocessing & training
@@ -116,23 +137,37 @@ LICESE
 ℹ For the contest, only these files are submitted: `answer.py`, `mk_vocab.py`, `run_quantum.py`, `utils.py`, `README.md`; it should be enough to run all quantum parts 😀
 
 
-### references
+### References
 
-- text-clf survey:
-  - [https://zhuanlan.zhihu.com/p/349086747](https://zhuanlan.zhihu.com/p/349086747)
-  - [https://zhuanlan.zhihu.com/p/161068416](https://zhuanlan.zhihu.com/p/161068416)
-  - [https://www.cnblogs.com/sandwichnlp/p/11698996.html](https://www.cnblogs.com/sandwichnlp/p/11698996.html)
-  - [https://mp.weixin.qq.com/s?__biz=MzI1MjQ2OTQ3Ng==&mid=2247485438&idx=1&sn=00dfcb8c344c3a622a88d9360c866c2e](https://mp.weixin.qq.com/s?__biz=MzI1MjQ2OTQ3Ng==&mid=2247485438&idx=1&sn=00dfcb8c344c3a622a88d9360c866c2e)
-- fastText: 
+- FastText: 
   - Enriching Word Vectors with Subword Information: [https://arxiv.org/abs/1607.04606](https://arxiv.org/abs/1607.04606)
   - Bag of Tricks for Efficient Text Classification: [https://arxiv.org/abs/1607.01759](https://arxiv.org/abs/1607.01759)
-- QNLP-DisCoCat: [https://arxiv.org/pdf/2102.12846.pdf](https://arxiv.org/pdf/2102.12846.pdf)
-- QSANN: [https://arxiv.org/abs/2205.05625](https://arxiv.org/abs/2205.05625)
+  - repo: [https://github.com/facebookresearch/fastText](https://github.com/facebookresearch/fastText)
+- QNN for text-clf:
+  - QNLP-DisCoCat: [https://arxiv.org/abs/2102.12846](https://arxiv.org/abs/2102.12846)
+  - QSANN: [https://arxiv.org/abs/2205.05625](https://arxiv.org/abs/2205.05625)
+- OriginQ: [https://originqc.com.cn/index.html](https://originqc.com.cn/index.html)
+  - QPanda: [https://github.com/OriginQ/QPanda-2](https://github.com/OriginQ/QPanda-2)
+  - pyQPanda: [https://pyqpanda-toturial.readthedocs.io/zh/latest/](https://pyqpanda-toturial.readthedocs.io/zh/latest/)
+  - pyVQNet: [https://vqnet20-tutorial.readthedocs.io/en/main/index.html](https://vqnet20-tutorial.readthedocs.io/en/main/index.html)
 
 => find thesis of related work in [ref/init_thesis.cmd](ref/init_thesis.cmd)  
 => find implementations of related work in [repo/init_repos.cmd](repo/init_repos.cmd)  
 
-----
+### Citation
 
+If you find our work useful, please cite us~ 😃
+
+```
+@misc{kahsolt2023,
+  author = {Kahsolt},
+  title  = {YouroQNet: Quantum Text Classification with Context Memory},
+  howpublished = {\url{https://github.com/Kahsolt/YouroQNet}}
+  month  = {May},
+  year   = {2023}
+}
+```
+
+----
 by Armit
 2023/05/03 
