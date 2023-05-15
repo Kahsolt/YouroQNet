@@ -40,6 +40,10 @@ ANALYZERS = [
   '3gram+',
   'kgram+',
 ]
+GRAD_METH = {
+  'fd': 'finite_diff',
+  'ps': 'parameter_shift',
+}
 
 if 'typing':
   QVM         = CPUQVM

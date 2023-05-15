@@ -117,10 +117,10 @@ def get_YouroQNet(args) -> QModelInit:
       for j, rot in enumerate(rots):
         qc << rot(qv[i], param[i][j])
     # entangles
-    for i in range(nq-1):
+    for i in range(nq - 1):
       qc << entgl(qv[i], qv[i + 1])
     if nq >= 3:
-      qc << entgl(qv[i], qv[0])   # back loop
+      qc << entgl(qv[i + 1], qv[0])   # back loop
     return qc
 
   def ControlMultiCircuitTemplate(q:Qubit, qv:Qubits, params:NDArray, entgl:QGate=RY) -> QCircuit:
@@ -183,7 +183,7 @@ def get_YouroQNet(args) -> QModelInit:
       ids = data.astype(np.int32)               # [L], one sample
       embed = embed.reshape(args.n_vocab, -1)   # [K, D=n_repeat*n_gate_param], whole embeding table
       theta = embed[ids]                        # sentence related embeddings
-      theta_n = np.arctan(theta)                # NOTE: assure angle range in [-pi/2, pi/2]
+      theta_n = 2 * np.arctan(theta)            # NOTE: assure angle range in [-pi, pi]
       return theta_n
 
     def build_buf_load(theta:NDArray) -> QCircuit:
@@ -223,7 +223,7 @@ def get_YouroQNet(args) -> QModelInit:
 
       # build circuit
       qc = QCircuit()
-      #qc << H(qv)
+      qc << H(qv)
       # NOTE: to keep code syntacical aligned, use the last portion for init
       qc << build_ctx_tranx(psi_T[-1, :]) \
          << BARRIER(qv)
@@ -251,8 +251,8 @@ def get_YouroQNet(args) -> QModelInit:
 
 
 def get_model_and_creterion(args) -> Tuple[QModel, Callable]:
-  compute_circuit, loss_cls, n_qubit, n_param =  globals()[f'get_{args.model}QNet'](args)
-  return QuantumLayer(compute_circuit, n_param, 'cpu', n_qubit), loss_cls()
+  compute_circuit, loss_cls, n_qubit, n_param = globals()[f'get_{args.model}QNet'](args)
+  return QuantumLayer(compute_circuit, n_param, 'cpu', n_qubit, 0, GRAD_METH[args.grad_meth], args.grad_dx), loss_cls()
 
 def get_vocab(args) -> Vocab:
   analyzer: str = args.analyzer
@@ -275,12 +275,10 @@ def get_word2id(args, symbols:List[str]) -> Vocab:
   word2id = { v: i for i, v in enumerate(syms) }
   return word2id
 
-def gen_dataloader(args, split:str, vocab:Vocab) -> Dataloader:
+def gen_dataloader(args, dataset:Dataset, vocab:Vocab, shuffle:bool=False) -> Dataloader:
+  T, Y = dataset
   word2id = get_word2id(args, list(vocab.keys()))
   tokenizer = make_tokenizer(vocab) if 'gram' in args.analyzer else list
-
-  shuffle = split == 'train'
-  T, Y = load_dataset(split)
 
   def iter_by_batch() -> Tuple[NDArray, NDArray]:
     nonlocal args, shuffle, T, Y, tokenizer, word2id
@@ -310,9 +308,8 @@ def test(args, model:QModel, creterion, test_loader:Dataloader, logger:Logger) -
   loss = 0.0
 
   model.eval()
-  for i, (X_np, Y_np) in enumerate(test_loader()):
-    X, Y = to_tensor(X_np, Y_np)
-    if i >= 32: break
+  for X_np, Y_np in test_loader():
+    X, Y = to_qtensor(X_np, Y_np)
   
     logits = model(X)
     l = creterion(Y, logits)
@@ -324,6 +321,8 @@ def test(args, model:QModel, creterion, test_loader:Dataloader, logger:Logger) -
 
   Y_true = np.asarray(Y_true, dtype=np.int32)
   Y_pred = np.asarray(Y_pred, dtype=np.int32)
+  print('Y_true', Y_true)
+  print('Y_pred', Y_pred)
 
   acc, f1 = get_acc_f1(Y_pred, Y_true, args.n_class)
   logger.info(f'>> acc: {acc:.3%}')
@@ -342,7 +341,7 @@ def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, tes
 
     model.train()
     for X_np, Y_np in train_loader():
-      X, Y = to_tensor(X_np, Y_np)
+      X, Y = to_qtensor(X_np, Y_np)
 
       optimizer.zero_grad()
       logits = model(X)
@@ -357,12 +356,16 @@ def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, tes
 
       step += 1
 
-      if step % 10 == 0:
+      if step % args.log_interval == 0:
+        logger.info(f'>> [Step {step}] loss: {loss / tot}, acc: {ok / tot:.3%}')
+      
+      if step % args.log_reset_interval == 0:
         losses.append(loss / tot)
         accs  .append(ok   / tot)
         logger.info(f'>> [Step {step}] loss: {losses[-1]}, acc: {accs[-1]:.3%}')
         tot, ok, loss = 0, 0, 0.0
 
+      if step % args.test_interval == 0:
         model.eval()
         tloss, tacc, tf1 = test(args, model, creterion, test_loader, logger)
         test_losses.append(tloss)
@@ -383,7 +386,7 @@ def infer(args, model:QModel, sent:str, tokenizer:Tokenizer, word2id:Vocab) -> V
   choose_sp = possible_sp if len(possible_sp) <= args.n_vote else random.sample(possible_sp, args.n_vote)
   X_np = np.stack([ ids[sp:sp+args.length] for sp in choose_sp ], axis=0)   # [V, mL=16]
 
-  X = to_tensor(X_np)   # [V, mL]
+  X = to_qtensor(X_np)   # [V, mL]
   logits = model(X)     # [V, NC]
   pred = argmax(logits) # [V]
   votes = pred.to_numpy().tolist()
@@ -400,25 +403,28 @@ def go_train(args):
   # symbols (codebook)
   vocab = get_vocab(args)
   args.n_vocab = len(vocab) + 1  # <PAD>
-  args.n_class = N_CLASS
 
   # data
-  train_loader = gen_dataloader(args, 'train', vocab)
-  test_loader  = gen_dataloader(args, 'test',  vocab)
-  valid_loader = gen_dataloader(args, 'valid', vocab)
+  train_loader = gen_dataloader(args, load_dataset('train'), vocab, shuffle=True)
+  test_loader  = gen_dataloader(args, load_dataset('test'),  vocab)
+  valid_loader = gen_dataloader(args, load_dataset('valid'), vocab)
 
   # model & optimizer & loss
   model, creterion = get_model_and_creterion(args)    # creterion accepts onehot label as truth
   args.param_cnt = sum([p.size for p in model.parameters() if p.requires_grad])
   
-  #optimizer = SGD(model.parameters(), lr=args.lr, momentum=0.9)
-  optimizer = Adam(model.parameters(), lr=args.lr)
+  if args.optim == 'SGD':
+    optimizer = SGD(model.parameters(), lr=args.lr, momentum=0.9)
+  elif args.optim == 'Adam':
+    optimizer = Adam(model.parameters(), lr=args.lr)
 
   # info
   logger.info(f'hparams: {pformat(vars(args))}')
 
   # train
   losses, accs, tlosses, taccs = train(args, model, optimizer, creterion, train_loader, test_loader, logger)
+  
+  # plot
   plt.clf()
   ax = plt.axes()
   ax.plot( losses, 'dodgerblue', label='train loss')
@@ -439,7 +445,7 @@ def go_train(args):
   result = { 'hparam': vars(args), 'scores': {} }
   for split in SPLITS:
     datat_loader = locals().get(f'{split}_loader')
-    loss, acc, f1 = test(args, model, datat_loader, logger)
+    loss, acc, f1 = test(args, model, creterion, datat_loader, logger)
     result['scores'][split] = {
       'loss': loss,
       'acc':  acc,
@@ -463,7 +469,6 @@ def go_infer(args, texts:List[str]=None) -> Union[Votes, Inferer]:
   word2id = get_word2id(args, list(vocab.keys()))
   tokenizer = make_tokenizer(vocab) if 'gram' in args.analyzer else list
   args.n_vocab = len(vocab) + 1  # <PAD>
-  args.n_class = N_CLASS
 
   # make a inferer callable if no text given
   if texts is None:
@@ -494,6 +499,9 @@ def get_args():
   parser = ArgumentParser()
   parser.add_argument('-L', '--analyzer',   default='kgram+', choices=ANALYZERS, help='tokenize level')
   parser.add_argument('-M', '--model',      default='Youro',  choices=MODELS,    help='model config string pattern')
+  parser.add_argument('-O', '--optim',      default='SGD',    choices=['SGD', 'Adam'],  help='optimizer')
+  parser.add_argument('-G', '--grad_meth',  default='fd',     choices=GRAD_METH.keys(), help='grad method')
+  parser.add_argument(      '--grad_dx',    default=0.01,     type=float, help='step size for finite_diff')
   parser.add_argument('-P', '--pad',        default='\x00',         help='model input pad')
   parser.add_argument('-N', '--length',     default=3,    type=int, help='model input length (in tokens)')
   parser.add_argument('-D', '--repeat',     default=2,    type=int, help='circuit n_repeat, effecting embed depth')
@@ -501,7 +509,11 @@ def get_args():
   parser.add_argument('-B', '--batch_size', default=4,    type=int)
   parser.add_argument('--lr',               default=0.1,  type=float)
   parser.add_argument('--min_freq',         default=5,    type=int, help='min_freq for final embedding vocab')
+  parser.add_argument('--n_class',    default=N_CLASS,    type=int, help='num of class')
   parser.add_argument('--n_vote',           default=5,    type=int, help='max number of voters at inference time')
+  parser.add_argument('--log_interval',       default=10,  type=int)
+  parser.add_argument('--log_reset_interval', default=50,  type=int)
+  parser.add_argument('--test_interval',      default=200, type=int)
   parser.add_argument('--eval', action='store_true', help='compare result scores')
   return parser.parse_args()
 
