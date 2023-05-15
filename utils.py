@@ -3,7 +3,8 @@
 # Create Time: 2023/05/05 
 
 import os
-IS_MODE_DEV = os.environ.get('MODE_DEV')
+MODE_DEV  = os.environ.get('MODE_DEV')
+RAND_SEED = os.environ.get('RAND_SEED', -1)
 
 import random
 from pathlib import Path
@@ -18,7 +19,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
-if not IS_MODE_DEV:
+if not MODE_DEV:
   import matplotlib; matplotlib.use('agg')
 else:
   plt.rcParams['font.sans-serif'] = ['SimHei']
@@ -30,12 +31,12 @@ if 'pyvqnet & pyqpanda':
   from pyvqnet.nn import Module
   from pyvqnet.qnn.quantumlayer import QuantumLayer
   from pyvqnet.utils.storage import load_parameters, save_parameters
+  from pyvqnet.utils import set_random_seed
 
 N_CLASS    = 4
-RANDSEED   = 114514
 COULMNS    = ['label', 'text']
-SPLITS     = ['train', 'test', 'valid'] if IS_MODE_DEV else ['train', 'test']
-DATA_PATH  = Path('data') if IS_MODE_DEV else Path('.')
+SPLITS     = ['train', 'test', 'valid'] if MODE_DEV else ['train', 'test']
+DATA_PATH  = Path('data') if MODE_DEV else Path('.')
 LOG_PATH   = Path('log') ; LOG_PATH.mkdir(exist_ok=True)
 TMP_PATH   = Path('tmp') ; TMP_PATH.mkdir(exist_ok=True)
 TASK_FILE  = 'task.json'
@@ -55,10 +56,6 @@ GRAD_METH = {
   'fd': 'finite_diff',
   'ps': 'parameter_shift',
 }
-
-if 'fix random seed':
-  random.seed(RANDSEED)
-  np.random.seed(RANDSEED)
 
 if 'typing':
   # quantum
@@ -116,22 +113,30 @@ def timer(fn):
     return r
   return wrapper
 
+def try_fix_randseed(seed:int):
+  if seed < 0: return
+
+  print(f'>> fix rand_seed to {seed} :)')
+  random.seed    (seed)
+  np.random.seed (seed)
+  set_random_seed(seed)
+
 def json_load(fp:str):
-  print(f'load hparam from {fp}')
+  print(f'>> load hparam from {fp}')
   with open(fp, 'r', encoding='utf-8') as fh:
     return json.load(fh)
 
 def json_dump(data:Any, fp:str):
-  print(f'dump hparam to {fp}')
+  print(f'>> dump hparam to {fp}')
   with open(fp, 'w', encoding='utf-8') as fh:
     json.dump(data, fh, indent=2, ensure_ascii=False)
 
 def load_ckpt(model:Module, fp:str):
-  print(f'load weights from {fp}')
+  print(f'>> load weights from {fp}')
   model.load_state_dict(load_parameters(fp))
 
 def save_ckpt(model:Module, fp:str):
-  print(f'save weights to {fp}')
+  print(f'>> save weights to {fp}')
   save_parameters(model.state_dict(), fp)
 
 ''' text '''
@@ -221,12 +226,12 @@ def id_to_onehot(label:int, n_class:int=None) -> NDArray:
 
 ''' dataset '''
 
-def load_dataset(split:str, normalize:bool=True, fp:Path=None, seed:int=RANDSEED) -> Dataset:
+def load_dataset(split:str, normalize:bool=True, fp:Path=None, seed:int=RAND_SEED) -> Dataset:
   ''' `fp` overrides the default filepath '''
 
   fp_norm = fp or DATA_PATH / f'{split}_cleaned.csv'
   if normalize and fp_norm.exists():
-    print(f'load cleaned {split} from cache {fp_norm}')
+    print(f'>> load cleaned {split} from cache {fp_norm}')
     return load_dataset(split, False, fp_norm)
 
   fp = fp or DATA_PATH / f'{split}.csv'

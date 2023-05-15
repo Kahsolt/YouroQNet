@@ -20,6 +20,7 @@ VocabP = Dict[str, float]   # { word: prob }
 VocabI = Dict[str, int]     # { word: index }
 
 def load_vocab(fp:str) -> Vocab:
+  print(f'>> load vocab from {fp}')
   with open(fp, encoding='utf-8') as fh:
     lines = fh.read().rstrip().split('\n')
   val_cnt = [line.split('\t') for line in lines]
@@ -35,6 +36,7 @@ def dump_vocab(voc:Vocab, fp:str, sort:bool=False):
     wc.to_file(Path(fp).with_suffix('.png'))
   except: pass
 
+  print(f'>> dump vocab to {fp}')
   with open(fp, 'w', encoding='utf-8') as fh:
     for v, c in voc.items():
       fh.write(f'{v}\t{c}\n')
@@ -48,7 +50,7 @@ def reverse_vocab(voc:Vocab) -> Vocab:
 
 def truncate_vocab(voc:Vocab, min_freq:int=3) -> Vocab:
   voc_trunc = {v: c for v, c in voc.items() if c >= min_freq}
-  print(f'truncate vocab: {len(voc)} => {len(voc_trunc)}')
+  print(f'>> truncate vocab: {len(voc)} => {len(voc_trunc)}')
   return voc_trunc
 
 def vocab_to_vocabp(voc:Vocab) -> VocabP:

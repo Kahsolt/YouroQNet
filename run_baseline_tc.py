@@ -132,7 +132,7 @@ def test(args, model:Module, data_loader:Dataloader, logger:Logger) -> Score:
   logger.info(cmat)
   return prec, recall, f1, cmat
 
-def valid(args, model:Module, creterion, data_loader:Dataloader, logger:Logger) -> Tuple[float, float]:
+def valid(args, model:Module, criterion, data_loader:Dataloader, logger:Logger) -> Tuple[float, float]:
   tot, ok, loss = 0, 0, 0.0
 
   model.eval()
@@ -140,7 +140,7 @@ def valid(args, model:Module, creterion, data_loader:Dataloader, logger:Logger) 
     X, Y = to_tensor(X_np, Y_np)
   
     logits = model(X)
-    l = creterion(logits, Y)
+    l = criterion(logits, Y)
     pred = argmax(logits)
 
     ok  += (Y == pred).sum()
@@ -149,7 +149,7 @@ def valid(args, model:Module, creterion, data_loader:Dataloader, logger:Logger) 
   
   return loss / tot, ok / tot
 
-def train(args, model:Module, optimizer, creterion, train_loader:Dataloader, test_loader:Dataloader, logger:Logger) -> LossesAccs:
+def train(args, model:Module, optimizer, criterion, train_loader:Dataloader, test_loader:Dataloader, logger:Logger) -> LossesAccs:
   step = 0
 
   losses, accs = [], []
@@ -164,7 +164,7 @@ def train(args, model:Module, optimizer, creterion, train_loader:Dataloader, tes
 
       optimizer.zero_grad()
       logits = model(X)
-      l = creterion(logits, Y)
+      l = criterion(logits, Y)
       l.backward()
       optimizer.step()
 
@@ -183,7 +183,7 @@ def train(args, model:Module, optimizer, creterion, train_loader:Dataloader, tes
 
       if step % args.test_interval == 0:
         model.eval()
-        tloss, tacc = valid(args, model, creterion, test_loader, logger)
+        tloss, tacc = valid(args, model, criterion, test_loader, logger)
         test_losses.append(tloss)
         test_accs  .append(tacc)
         model.train()
@@ -210,7 +210,7 @@ def go_train(args):
 
   # model & optimizer & loss
   model = get_model(args)
-  creterion = CrossEntropyLoss()    # creterion accepts integer label as truth
+  criterion = CrossEntropyLoss()    # criterion accepts integer label as truth
   args.param_cnt = sum([p.numel() for p in model.parameters() if p.requires_grad])
   
   if args.optim == 'SGD':
@@ -222,7 +222,7 @@ def go_train(args):
   logger.info(f'hparam: {pformat(vars(args))}')
 
   # train
-  losses_and_accs = train(args, model, optimizer, creterion, train_loader, test_loader, logger)
+  losses_and_accs = train(args, model, optimizer, criterion, train_loader, test_loader, logger)
 
   # plot
   plot_loss_and_acc(losses_and_accs, out_dp / PLOT_FILE, title=args.expname)

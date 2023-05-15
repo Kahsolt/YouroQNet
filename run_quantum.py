@@ -123,11 +123,11 @@ def compute_circuit(cq:QCircuit, qv:Qubits, qvm:QVM, mbit:int=1) -> Probs:
     LogOnce.export_circuit = False
     try:
       fp = TMP_PATH / 'circuit.png'
-      print(f'save circuit to {fp}')
+      print(f'>> save circuit to {fp}')
       draw_qprog(prog, output='pic', filename=str(fp))
     except: pass
     fp = TMP_PATH / 'circuit.txt'
-    print(f'save circuit to {fp}')
+    print(f'>> save circuit to {fp}')
     draw_qprog_text(prog, output_file=str(fp))
 
   return prob
@@ -179,9 +179,9 @@ def get_YouroQNet(args) -> QModelInit:
 
   def YouroQNet_qdrl(data:NDArray, param:NDArray, qv:Qubits, cv:Cbits, qvm:QVM):
     def embed_lookup(embed:NDArray, data:NDArray) -> NDArray:
-      ids = data.astype(np.int32)               # [L], one sample
-      theta = embed[ids]                        # [mL, D], sentence related embeddings
-      theta_n = 2 * np.arctan(theta)            # NOTE: assure angle range in [-pi, pi]
+      ids = data.astype(np.int32)       # [L], one sample
+      theta = embed[ids]                # [mL, D], sentence related embeddings
+      theta_n = embed_norm(theta)       # NOTE: assure angle range in [-pi, pi]
       return theta_n
 
     def build_buf_load(theta:NDArray) -> QCircuit:
@@ -244,20 +244,32 @@ def get_YouroQNet(args) -> QModelInit:
     psi   = param[n_param_t:]           # ansatz params
     return compute_circuit(build_circuit(theta, psi), qv, qvm, n_qubit_p)
 
-  return YouroQNet_qdrl, BinaryCrossEntropy, n_qubit, n_param
+  return BinaryCrossEntropy, YouroQNet_qdrl, n_qubit, n_param
 
 
-def get_model_and_creterion(args) -> Tuple[QModel, Callable]:
-  compute_circuit, loss_cls, n_qubit, n_param = globals()[f'get_{args.model}QNet'](args)
-  return QuantumLayer(compute_circuit, n_param, 'cpu', n_qubit, 0, GRAD_METH[args.grad_meth], args.grad_dx), loss_cls()
+def get_model_and_criterion(args) -> Tuple[QModel, Callable]:
+  loss_cls, compute_circuit, n_qubit, n_param = globals()[f'get_{args.model}QNet'](args)
+  criterion = loss_cls()
+  model = QuantumLayer(compute_circuit, n_param, 'cpu', n_qubit, 0, GRAD_METH[args.grad_meth], args.grad_dx)
+  model.m_para.fill_rand_normal_(m=0, s=0.2)
+  # NOTE: uniform inits do not work in most cases
+  #model.m_para.fill_rand_uniform_(v=1)
+  #model.m_para.fill_rand_signed_uniform_(v=1)
+  #model.m_para.fill_rand_uniform_with_bound_(-np.pi/2, np.pi/2)
+  return model, criterion
 
 def get_embedding(args, param) -> NDArray:
   assert hasattr(args, 'n_param_t'), f'args.n_param_t not found, forgot to load from {TASK_FILE} ??'
   phi = param[:args.n_param_t]
   return phi.reshape(args.n_vocab, -1)   # [K, D=n_repeat*n_gate_param]
 
+def embed_norm(x:NDArray) -> NDArray:
+  ''' value norm raw embeddings, assure rotation angle ranged in [-pi, pi] '''
+  #return np.arctan(x)      # NOTE: [-pi/2, pi/2] seems not work in most cases
+  return 2 * np.arctan(x)
 
-def test(args, model:QModel, creterion, test_loader:Dataloader, logger:Logger) -> Metrics:
+
+def test(args, model:QModel, criterion, test_loader:Dataloader, logger:Logger) -> Metrics:
   Y_true, Y_pred = [], []
   loss = 0.0
 
@@ -266,7 +278,7 @@ def test(args, model:QModel, creterion, test_loader:Dataloader, logger:Logger) -
     X, Y = to_qtensor(X_np, Y_np)
   
     logits = model(X)
-    l = creterion(Y, logits)
+    l = criterion(Y, logits)
     pred = argmax(logits)
 
     Y_true.extend(   Y.to_numpy().argmax(-1).tolist())
@@ -284,7 +296,7 @@ def test(args, model:QModel, creterion, test_loader:Dataloader, logger:Logger) -
   logger.info(f'>> score: {sum(f1) / len(f1) * 60}')
   return loss / len(Y_true), acc, f1
 
-def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, test_loader:Dataloader, logger:Logger) -> LossesAccs:
+def train(args, model:QModel, optimizer, criterion, train_loader:Dataloader, test_loader:Dataloader, logger:Logger) -> LossesAccs:
   step = 0
 
   losses, accs = [], []
@@ -299,7 +311,7 @@ def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, tes
 
       optimizer.zero_grad()
       logits = model(X)
-      l = creterion(Y, logits)
+      l = criterion(Y, logits)
       l.backward()
       optimizer._step()
 
@@ -321,7 +333,7 @@ def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, tes
 
       if step % args.test_interval == 0:
         model.eval()
-        tloss, tacc, tf1 = test(args, model, creterion, test_loader, logger)
+        tloss, tacc, tf1 = test(args, model, criterion, test_loader, logger)
         test_losses.append(tloss)
         test_accs  .append(tacc)
         test_f1s   .append(tf1)
@@ -372,7 +384,7 @@ def go_train(args, user_vocab_data:Tuple[Vocab, Dataset, Dataset]=None, name_suf
     valid_loader = gen_dataloader(args, load_dataset('valid'), vocab)
 
   # model & optimizer & loss
-  model, creterion = get_model_and_creterion(args)    # creterion accepts onehot label as truth
+  model, criterion = get_model_and_criterion(args)    # criterion accepts onehot label as truth
   args.param_cnt = sum([p.size for p in model.parameters() if p.requires_grad])
   
   if args.optim == 'SGD':
@@ -384,7 +396,7 @@ def go_train(args, user_vocab_data:Tuple[Vocab, Dataset, Dataset]=None, name_suf
   logger.info(f'hparam: {pformat(vars(args))}')
 
   # train
-  losses_and_accs = train(args, model, optimizer, creterion, train_loader, test_loader, logger)
+  losses_and_accs = train(args, model, optimizer, criterion, train_loader, test_loader, logger)
   
   # plot
   plot_loss_and_acc(losses_and_accs, out_dp / PLOT_FILE, title=args.expname)
@@ -399,7 +411,7 @@ def go_train(args, user_vocab_data:Tuple[Vocab, Dataset, Dataset]=None, name_suf
     datat_loader = locals().get(f'{split}_loader')
     if datat_loader is None: continue     # ignore if valid_loader not exists
     logger.info(f'testing split {split} ...')
-    loss, acc, f1 = test(args, model, creterion, datat_loader, logger)
+    loss, acc, f1 = test(args, model, criterion, datat_loader, logger)
     result['scores'][split] = {
       'loss': loss,
       'acc':  acc,
@@ -414,7 +426,7 @@ def go_infer(args, texts:List[str]=None, name_suffix:str='') -> Union[Votes, Inf
   assert out_dp.exists(), 'you must train this model before you can infer from :('
   
   # model
-  model, _ = get_model_and_creterion(args)
+  model, _ = get_model_and_criterion(args)
   load_ckpt(model, out_dp / MODEL_FILE)
 
   # symbols (codebook)
@@ -444,7 +456,7 @@ def go_infer(args, texts:List[str]=None, name_suffix:str='') -> Union[Votes, Inf
   return preds
 
 
-def go_inspect(args, name_suffix:str=''):
+def go_inspect(args, name_suffix:str='', words:List[str]=None):
   # configs
   out_dp: Path = LOG_PATH / args.analyzer / f'{args.model}{name_suffix}'
   assert out_dp.exists(), 'you must train this model before you can infer from :('
@@ -460,17 +472,22 @@ def go_inspect(args, name_suffix:str=''):
   param = ckpt['m_para'].to_numpy()
   print('param.shape:', param.shape)
   embed = get_embedding(args, param)
+  K, D = embed.shape
   print('embed.shape:', embed.shape)
 
   # plot
+  embed_n  = embed_norm(embed)
+  embed_np = np.abs(embed_n)
+  vmax = np.max([e.max() for e in [embed, embed_n, embed_np]])
+  vmin = np.min([e.min() for e in [embed, embed_n, embed_np]])
   plt.clf()
-  plt.subplot(121)
-  plt.imshow(embed, cmap='bwr')
-  plt.colorbar(orientation='vertical', location='right')
-  plt.subplot(122)
-  plt.imshow(2*np.arctan(embed), cmap='bwr')
-  plt.colorbar(orientation='vertical', location='right')
-  plt.suptitle(f'embed: {embed.shape}')
+  plt.subplot(131) ; plt.imshow(embed,    cmap='bwr', vmax=vmax, vmin=vmin) ; plt.colorbar() ; plt.title('embed')
+  if words: plt.yticks(range(len(words)), words)
+  plt.subplot(132) ; plt.imshow(embed_n,  cmap='bwr', vmax=vmax, vmin=vmin) ; plt.colorbar() ; plt.title('2*arctan(embed)')
+  if words: plt.yticks(range(len(words)), words)
+  plt.subplot(133) ; plt.imshow(embed_np, cmap='bwr', vmax=vmax, vmin=vmin) ; plt.colorbar() ; plt.title('|2*arctan(embed)|')
+  if words: plt.yticks(range(len(words)), words)
+  plt.suptitle(f'embed: n_vocab={K} n_dim={D}')
   savefig(out_dp / 'embed.png')
 
 
@@ -490,12 +507,16 @@ def get_args():
   parser.add_argument('-B', '--batch_size', default=4,   type=int)
   parser.add_argument('--lr',               default=0.1, type=float)
   parser.add_argument('--min_freq',         default=5,   type=int, help='min_freq for final embedding vocab')
-  parser.add_argument('--n_class',    default=N_CLASS,   type=int, help='num of class')
   parser.add_argument('--n_vote',           default=5,   type=int, help='max number of voters at inference time')
+  parser.add_argument('--n_class',    default=N_CLASS,   type=int, help='num of class')
+  parser.add_argument('--seed',     default=RAND_SEED,   type=int, help='rand seed')
   parser.add_argument('--slog_interval',    default=10,  type=int, help='log loss/acc')
   parser.add_argument('--log_interval',     default=50,  type=int, help='log & reset loss/acc')
   parser.add_argument('--test_interval',    default=200, type=int, help='test on valid split')
-  return parser.parse_args()
+  args = parser.parse_args()
+  
+  try_fix_randseed(args.seed)
+  return args
 
 
 if __name__ == '__main__':

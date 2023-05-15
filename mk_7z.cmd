@@ -10,6 +10,7 @@
   -xr!data\valid.csv ^
   -xr!data\unknown.csv ^
   -xr!log\ ^
+  -xr!tmp\ ^
   -xr!.git\ ^
   -xr!.vscode\ ^
   -xr!__pycache__\ ^

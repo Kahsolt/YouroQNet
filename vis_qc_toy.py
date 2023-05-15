@@ -82,7 +82,7 @@ def train(args):
   qdrl_circuit = partial(make_qdrl_circuit, args.n_repeat)
   model = QuantumLayer(qdrl_circuit, args.param_num, 'cpu', args.qubit_num, 0, GRAD_METH[args.grad_meth], args.grad_dx)
   print('param_cnt:', sum([p.size for p in model.parameters()]))
-  creterion = MeanSquaredError()
+  criterion = MeanSquaredError()
   
   if args.optimizer == 'Adam':
     optimizer = Adam(model.parameters(), lr=args.lr, beta1=0.9, beta2=0.999, epsilon=1e-8, amsgrad=False)
@@ -97,7 +97,7 @@ def train(args):
   model.train()
   for i in range(args.steps):
     output = model(X)
-    loss = creterion(Y, output)
+    loss = criterion(Y, output)
     optimizer.zero_grad()
     loss.backward()
     optimizer._step()

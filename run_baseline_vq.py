@@ -300,7 +300,7 @@ def test(args, model:Module, data_loader:Dataloader, logger:Logger) -> Score:
   logger.info(cmat)
   return prec, recall, f1, cmat
 
-def valid(args, model:Module, creterion, data_loader:Dataloader, logger:Logger) -> Tuple[float, float]:
+def valid(args, model:Module, criterion, data_loader:Dataloader, logger:Logger) -> Tuple[float, float]:
   tot, ok, loss = 0, 0, 0.0
 
   model.eval()
@@ -308,7 +308,7 @@ def valid(args, model:Module, creterion, data_loader:Dataloader, logger:Logger) 
     X, Y = to_qtensor(X_np, Y_np)
   
     logits = model(X)
-    l = creterion(Y, logits)
+    l = criterion(Y, logits)
     pred = argmax(logits)
 
     ok  += (Y_np == pred.to_numpy().astype(np.int32)).sum()
@@ -317,7 +317,7 @@ def valid(args, model:Module, creterion, data_loader:Dataloader, logger:Logger) 
   
   return loss / tot, ok / tot
 
-def train(args, model:Module, optimizer, creterion, train_loader:Dataloader, test_loader:Dataloader, logger:Logger) -> LossesAccs:
+def train(args, model:Module, optimizer, criterion, train_loader:Dataloader, test_loader:Dataloader, logger:Logger) -> LossesAccs:
   step = 0
 
   losses, accs = [], []
@@ -332,7 +332,7 @@ def train(args, model:Module, optimizer, creterion, train_loader:Dataloader, tes
 
       optimizer.zero_grad()
       logits = model(X)
-      l = creterion(Y, logits)
+      l = criterion(Y, logits)
       l.backward()
       optimizer._step()
 
@@ -351,7 +351,7 @@ def train(args, model:Module, optimizer, creterion, train_loader:Dataloader, tes
 
       if step % args.test_interval == 0:
         model.eval()
-        tloss, tacc = valid(args, model, creterion, test_loader, logger)
+        tloss, tacc = valid(args, model, criterion, test_loader, logger)
         test_losses.append(tloss)
         test_accs  .append(tacc)
         model.train()
@@ -378,7 +378,7 @@ def go_train(args):
 
   # model & optimizer & loss
   model = get_model(args)
-  creterion = CrossEntropyLoss()    # creterion accepts integer label as truth
+  criterion = CrossEntropyLoss()    # criterion accepts integer label as truth
   args.param_cnt = sum([p.size for p in model.parameters() if p.requires_grad])
   
   if args.optim == 'SGD':
@@ -390,7 +390,7 @@ def go_train(args):
   logger.info(f'hparam: {pformat(vars(args))}')
 
   # train
-  losses_and_accs = train(args, model, optimizer, creterion, train_loader, test_loader, logger)
+  losses_and_accs = train(args, model, optimizer, criterion, train_loader, test_loader, logger)
 
   # plot
   plot_loss_and_acc(losses_and_accs, out_dp / PLOT_FILE, title=args.expname)
@@ -426,9 +426,13 @@ def get_args():
   parser.add_argument('--lr',               default=1e-3, type=float)
   parser.add_argument('--min_freq',         default=5,    type=int, help='final vocab for embedding')
   parser.add_argument('--n_class',    default=N_CLASS,    type=int, help='num of class')
-  parser.add_argument('--log_interval',     default=50,  type=int, help='log & reset loss/acc')
-  parser.add_argument('--test_interval',    default=200, type=int, help='test on valid split')
-  return parser.parse_args()
+  parser.add_argument('--seed',     default=RAND_SEED,    type=int, help='rand seed')
+  parser.add_argument('--log_interval',     default=50,   type=int, help='log & reset loss/acc')
+  parser.add_argument('--test_interval',    default=200,  type=int, help='test on valid split')
+  args = parser.parse_args()
+
+  try_fix_randseed(args.seed)
+  return args
 
 
 if __name__ == '__main__':

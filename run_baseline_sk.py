@@ -20,7 +20,7 @@ try:
     from sklearnex import patch_sklearn ; patch_sklearn()
   except:
     print_exc()
-    print('sklearnex not installed, performance may be slow')
+    print('>> sklearnex not installed, performance may be slow')
   from sklearn.feature_extraction.text import TfidfVectorizer
   from sklearn.neighbors import KNeighborsClassifier
   from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier
@@ -32,14 +32,14 @@ try:
   from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 except:
   print_exc()
-  print('sklearn not installed, some of the features may not work')
+  print('>> sklearn not installed, some of the features may not work')
 
 try:
   import fasttext.util
   from fasttext.FastText import _FastText as FastText
 except:
   print_exc()
-  print('fasttext not installed, some of the features may not work')
+  print('>> fasttext not installed, some of the features may not work')
 
 from utils import *
 from mk_vocab import make_tokenizer

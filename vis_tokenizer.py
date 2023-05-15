@@ -16,7 +16,7 @@ def run_tokenize_dataset():
       for t in T:
         segs = tokenizer(t, top_k=None)
         fh.write(' '.join(segs) + '\n')
-    print(f'save to {fp}...')
+    print(f'>> save to {fp}...')
 
 
 def run_tokenize_interactive():

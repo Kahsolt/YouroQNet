@@ -15,25 +15,27 @@ words = {
   # negetive (leading to class 1)
   '恨', '讨厌',
   # neutral
-  '我', '你', '苹果', '西瓜',
+  '我', '你', '苹果', '西瓜', '啊',
 }
 train_data = [
   (0, '我爱你'),
   (0, '我喜欢苹果'),
+  (0, '苹果啊喜欢'),
   (0, '你爱西瓜'),
   (1, '你讨厌我'),
-  (1, '讨厌西瓜'),
+  (1, '讨厌西瓜苹果'),
   (1, '你讨厌苹果'),
   (1, '我恨恨恨'),
 ]
 test_data = [
-  (0, '喜欢'),
-  (0, '喜欢喜欢我'),
+  (0, '西瓜喜欢'),
+  (0, '我喜欢喜欢'),
   (0, '苹果爱'),
   (0, '你爱我'),
   (1, '讨厌你'),
-  (1, '讨厌讨厌'),
+  (1, '讨厌苹果'),
   (1, '恨你'),
+  (1, '啊恨啊'),
 ]
 vocab = { w: sum(txt.count(w) for _, txt in train_data) for w in words }
 
@@ -73,13 +75,11 @@ def go_all(args):
   trainset = [e[1] for e in train_data], [e[0] for e in train_data]
   testset  = [e[1] for e in test_data],  [e[0] for e in test_data]
   go_train(args, (vocab, trainset, testset), name_suffix=SUFFIX)
+  plt.show()
 
   # inspect
-  go_inspect(args, name_suffix=SUFFIX)
-
-  # hijack the plt axis
   words = [id2word[id] for id in sorted(id2word.keys())]
-  plt.yticks(range(len(words)), words)
+  go_inspect(args, name_suffix=SUFFIX, words=words)
   plt.show()
 
 
@@ -90,10 +90,10 @@ if __name__ == '__main__':
   print('>>       you must modify the code to change them, cannot passing by cmdline :)')
 
   # tunable
-  args.epochs     = 150
+  args.epochs     = 75
   args.n_repeat   = 1
   args.batch_size = 1
-  args.lr         = 0.1
+  args.lr         = 0.01
   args.grad_meth  = 'fd'
   args.grad_dx    = 0.01
 
