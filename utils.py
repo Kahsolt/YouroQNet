@@ -119,7 +119,7 @@ def load_dataset(split:str, normalize:bool=True, fp:Path=None, seed:int=RANDSEED
     df = pd.concat([df_cls.sample(n=1000, random_state=seed) for _, df_cls in df.groupby(c_lbl)])
   Y = df[c_lbl].to_numpy().astype(np.int32)
   T = df[c_txt].to_numpy().tolist()
-  if normalize: T = clean_texts(T)
+  if normalize: T = [clean_text(t) for t in T]
   return T, Y
 
 ''' metric '''
@@ -198,21 +198,20 @@ if 'consts for text':
       r.append(chars[i])
     return ''.join(r)
 
-def clean_texts(texts:List[str]) -> List[str]:
-  def _process(s:str) -> str:
-    try:
-      s = R_DEADCHAR.sub('', s)
-      s = R_CJK_PERIOD.sub('.', s)
-      s = R_CJK_PUASE.sub(',', s)
-      s = wchar_to_char(s)
-      s = s.lower()
-      s = R_WHITESPACE.sub(' ', s)
-      s = R_NUMBER.sub('0', s)
-      s = try_concat(s)
-      s = fold_triple(s)
-    except: print_exc()
-    return s
-  return [_process(line) for line in texts]
+def clean_text(sent:str) -> str:
+  s = sent
+  try:
+    s = R_DEADCHAR.sub('', s)
+    s = R_CJK_PERIOD.sub('.', s)
+    s = R_CJK_PUASE.sub(',', s)
+    s = wchar_to_char(s)
+    s = s.lower()
+    s = R_WHITESPACE.sub(' ', s)
+    s = R_NUMBER.sub('0', s)
+    s = try_concat(s)
+    s = fold_triple(s)
+  except: print_exc()
+  return s
 
 def align_words(words:List[str], n_limit:int, pad:str='') -> List[str]:
   nlen = len(words)

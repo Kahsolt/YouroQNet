@@ -377,7 +377,7 @@ def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, tes
 
 def infer(args, model:QModel, sent:str, tokenizer:Tokenizer, word2id:Vocab) -> Votes:
   PAD_ID = word2id.get(args.pad, -1)
-  toks = tokenizer(sent)
+  toks = tokenizer(clean_text(sent))
   if len(toks) < args.length:
     toks = align_words(toks, args.length, args.pad)
 
