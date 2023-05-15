@@ -88,20 +88,10 @@ def go_train(args):
     optimizer = Adam(model.parameters(), lr=args.lr)
 
   # train
-  losses, accs, tlosses, taccs = train(args, model, optimizer, creterion, train_loader, valid_loader, logger)
+  losses_and_accs = train(args, model, optimizer, creterion, train_loader, valid_loader, logger)
   
   # plot
-  plt.clf()
-  ax = plt.axes()
-  ax.plot( losses, 'dodgerblue', label='train loss')
-  ax.plot(tlosses, 'b',          label='valid loss')
-  ax2 = ax.twinx()
-  ax2.plot( accs, 'orangered', label='train acc')
-  ax2.plot(taccs, 'r',         label='valid acc')
-  plt.legend()
-  plt.tight_layout()
-  plt.suptitle('YouroQNet toy')
-  plt.savefig(TMP_PATH / 'vis_youroqnet_toy.png', dpi=600)
+  plot_loss_and_acc(losses_and_accs, TMP_PATH / 'vis_youroqnet_toy.png', title='YouroQNet toy')
 
 
 if __name__ == '__main__':

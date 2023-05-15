@@ -149,7 +149,7 @@ def valid(args, model:Module, creterion, data_loader:Dataloader, logger:Logger) 
   
   return loss / tot, ok / tot
 
-def train(args, model:Module, optimizer, creterion, train_loader:Dataloader, test_loader:Dataloader, logger:Logger) -> List[List[float]]:
+def train(args, model:Module, optimizer, creterion, train_loader:Dataloader, test_loader:Dataloader, logger:Logger) -> LossesAccs:
   step = 0
 
   losses, accs = [], []
@@ -232,19 +232,11 @@ def go_train(args):
   logger.info(f'hparams: {vars(args)}')
 
   # train
-  losses, accs, tlosses, taccs = train(args, model, optimizer, creterion, train_loader, test_loader, logger)
-  plt.clf()
-  ax = plt.axes()
-  ax.plot( losses, 'dodgerblue', label='train loss')
-  ax.plot(tlosses, 'b',          label='test loss')
-  ax2 = ax.twinx()
-  ax2.plot( accs, 'orangered', label='train acc')
-  ax2.plot(taccs, 'r',         label='test acc')
-  plt.legend()
-  plt.tight_layout()
-  plt.suptitle(args.expname)
-  plt.savefig(out_dp / 'loss.png', dpi=600)
-  
+  losses_and_accs = train(args, model, optimizer, creterion, train_loader, test_loader, logger)
+
+  # plot
+  plot_loss_and_acc(losses_and_accs, out_dp / 'loss_acc.png', title=args.expname)
+
   # save & load
   save_ckpt(model, out_dp / 'model.pth')
   load_ckpt(model, out_dp / 'model.pth')

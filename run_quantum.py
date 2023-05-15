@@ -62,8 +62,6 @@ if 'pyvqnet & pyqpanda':
   from pyvqnet.utils.storage import load_parameters, save_parameters
 
 import numpy as np
-import matplotlib ; matplotlib.use('agg')
-import matplotlib.pyplot as plt
 
 from utils import *
 from mk_vocab import make_tokenizer, load_vocab, truncate_vocab, Vocab, Tokenizer
@@ -330,7 +328,7 @@ def test(args, model:QModel, creterion, test_loader:Dataloader, logger:Logger) -
   logger.info(f'>> score: {sum(f1) / len(f1) * 60}')
   return loss / len(Y_true), acc, f1
 
-def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, test_loader:Dataloader, logger:Logger) -> List[List[float]]:
+def train(args, model:QModel, optimizer, creterion, train_loader:Dataloader, test_loader:Dataloader, logger:Logger) -> LossesAccs:
   step = 0
 
   losses, accs = [], []
@@ -422,20 +420,10 @@ def go_train(args):
   logger.info(f'hparams: {pformat(vars(args))}')
 
   # train
-  losses, accs, tlosses, taccs = train(args, model, optimizer, creterion, train_loader, test_loader, logger)
+  losses_and_accs = train(args, model, optimizer, creterion, train_loader, test_loader, logger)
   
   # plot
-  plt.clf()
-  ax = plt.axes()
-  ax.plot( losses, 'dodgerblue', label='train loss')
-  ax.plot(tlosses, 'b',          label='test loss')
-  ax2 = ax.twinx()
-  ax2.plot( accs, 'orangered', label='train acc')
-  ax2.plot(taccs, 'r',         label='test acc')
-  plt.legend()
-  plt.tight_layout()
-  plt.suptitle(args.expname)
-  plt.savefig(out_dp / 'loss.png', dpi=600)
+  plot_loss_and_acc(losses_and_accs, out_dp / 'loss_acc.png', title=args.expname)
   
   # save & load
   save_ckpt(model, out_dp / 'model.pth')

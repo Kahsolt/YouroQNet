@@ -3,6 +3,8 @@
 # Create Time: 2023/05/05 
 
 import os
+IS_DEBUG = os.environ.get('MODE_DEVELOP')
+
 import random
 from pathlib import Path
 from time import time
@@ -13,6 +15,10 @@ from typing import *
 
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+if not IS_DEBUG:
+  import matplotlib ; matplotlib.use('agg')
 
 if 'pyvqnet & pyqpanda':
   from pyqpanda import CPUQVM, Qubit, QVec, ClassicalCondition
@@ -20,8 +26,6 @@ if 'pyvqnet & pyqpanda':
   from pyvqnet.nn import Module
   from pyvqnet.qnn.quantumlayer import QuantumLayer
   from pyvqnet.utils.storage import load_parameters, save_parameters
-
-IS_DEBUG = os.environ.get('MODE_DEVELOP')
 
 N_CLASS  = 4
 RANDSEED = 114514
@@ -45,6 +49,10 @@ GRAD_METH = {
   'ps': 'parameter_shift',
 }
 
+if 'fix random seed':
+  random.seed(RANDSEED)
+  np.random.seed(RANDSEED)
+
 if 'typing':
   QVM         = CPUQVM
   QModel      = QuantumLayer
@@ -63,6 +71,7 @@ if 'typing':
   F1          = List[float]                 # [f1]
   AccF1       = Tuple[float, F1]            # acc, [f1]
   Metrics     = Tuple[float, float, F1]     # loss, acc, [f1]
+  LossesAccs  = Tuple[List[float], ...]
   Votes       = List[int]
   Inferer     = Callable[[str], Votes]
 
@@ -219,3 +228,23 @@ def align_words(words:List[str], n_limit:int, pad:str='') -> List[str]:
   if nlen  < n_limit: return words + [pad] * (n_limit - nlen)
   cp = random.randrange(nlen - n_limit)
   return words[cp : cp + n_limit]
+
+''' plot '''
+
+def plot_loss_and_acc(losses_and_accs:LossesAccs, fp:str=None, title:str='') -> Figure:
+  losses, accs, tlosses, taccs = losses_and_accs
+  plt.clf()
+  ax = plt.axes()
+  ax.plot( losses, 'dodgerblue', label='train loss')
+  ax.plot(tlosses, 'b',          label='valid loss')
+  ax2 = ax.twinx()
+  ax2.plot( accs, 'orangered', label='train acc')
+  ax2.plot(taccs, 'r',         label='valid acc')
+  plt.legend()
+  plt.suptitle('YouroQNet toy')
+
+  if fp:
+    fp = TMP_PATH / 'vis_youroqnet_toy.png'
+    plt.savefig(fp, dpi=600)
+    print(f'>> savefig to {fp}')
+  return plt.gcf()
