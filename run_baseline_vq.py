@@ -44,7 +44,6 @@ if 'pyvqnet':
   # ckpt
   from pyvqnet.utils.storage import load_parameters, save_parameters
 
-import matplotlib.pyplot as plt
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 
 from utils import *

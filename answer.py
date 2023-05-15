@@ -53,7 +53,7 @@ def question1(fp: str) -> np.ndarray:
 
   # query data
   df = pd.read_csv(fp)
-  T = df[df.columns[-1]].to_numpy()
+  T = df[df.columns[-1]].to_numpy().tolist()
 
   # inference
   args = get_args_best_config()

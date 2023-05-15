@@ -26,6 +26,7 @@ And, code repo for the qualifying stage is here: [第二届“司南杯”初赛
 
 ⚪ for full development
 
+- download the full dataset [simplifyweibo_4_moods](https://github.com/SophonPlus/ChineseNlpCorpus/blob/master/datasets/simplifyweibo_4_moods/intro.ipynb), unzip `simplifyweibo_4_moods.csv` to `data` folder
 - `pip install -r requirements_dev.txt` for extra dependencies
 - `pushd repo & init_repos.cmd & popd` for extra git repos
   - fasttext==0.9.2 requires numpy<1.24 (things might changed)

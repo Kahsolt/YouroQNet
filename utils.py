@@ -204,6 +204,8 @@ def load_dataset(split:str, normalize:bool=True, fp:Path=None, seed:int=RANDSEED
     return load_dataset(split, False, fp_norm)
 
   fp = fp or DATA_PATH / f'{split}.csv'
+  assert fp.exists(), '>> data.csv file not found, forgot to set envvar MODE_DEV=1 ??'
+
   df = pd.read_csv(fp)
   c_lbl, c_txt = df.columns[0], df.columns[-1]
   if split == 'valid':    # the whole valid set is too large

@@ -3,7 +3,7 @@
 # Create Time: 2023/05/10 
 
 from mk_vocab import *
-from utils import DATA_PATH, SPLITS, clean_texts
+from utils import DATA_PATH, SPLITS, clean_text
 
 
 def run_tokenize_dataset():
@@ -24,7 +24,7 @@ def run_tokenize_interactive():
   try:
     while True:
       t = input('input a sentence: ')
-      t = clean_texts([t])[0]   # call normalize manually
+      t = clean_text(t)         # call normalize manually
       for logp, segs in tokenizer(t, top_k=-1):
         print(f'[{logp:.3f}]', ' '.join(segs))
   except KeyboardInterrupt:
