@@ -65,7 +65,7 @@ if 'typing':
 mean   = lambda x: sum(x) / len(x)
 mode   = lambda x: np.argmax(np.bincount(x))
 argmax = lambda x: x.argmax([-1], False)    # [axis], keepdims; only for QTensor
-to_tensor = lambda *xs: tuple(QTensor(x) for x in xs) if len(xs) > 1 else QTensor(xs[0])
+to_qtensor = lambda *xs: tuple(QTensor(x) for x in xs) if len(xs) > 1 else QTensor(xs[0])
 
 ''' utils '''
 

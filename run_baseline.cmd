@@ -23,6 +23,7 @@ ECHO start train vq...
 
 SET id=0
 SET MODEL=
+SET RUNNER=
 SET FINAL=
 
 REM mode config naming patterns:
@@ -61,13 +62,19 @@ SET FINAL=1
 GOTO train_vq
 
 :train_vq
-python run_baseline_vq.py --analyzer char   --model !MODEL!
-python run_baseline_vq.py --analyzer 2gram  --model !MODEL!
-python run_baseline_vq.py --analyzer 3gram  --model !MODEL!
-python run_baseline_vq.py --analyzer kgram  --model !MODEL!
-python run_baseline_vq.py --analyzer 2gram+ --model !MODEL!
-python run_baseline_vq.py --analyzer 3gram+ --model !MODEL!
-python run_baseline_vq.py --analyzer kgram+ --model !MODEL!
+IF /I "%MODEL:~0,3%"=="cnn" (
+  SET RUNNER=run_baseline_vq.py
+) ELSE (
+  SET RUNNER=run_baseline_tc.py
+)
+
+python %RUNNER% --analyzer char   --model !MODEL!
+python %RUNNER% --analyzer 2gram  --model !MODEL!
+python %RUNNER% --analyzer 3gram  --model !MODEL!
+python %RUNNER% --analyzer kgram  --model !MODEL!
+python %RUNNER% --analyzer 2gram+ --model !MODEL!
+python %RUNNER% --analyzer 3gram+ --model !MODEL!
+python %RUNNER% --analyzer kgram+ --model !MODEL!
 
 SET /A id = !id! + 1 > NUL
 IF "!FINAL!"=="1" (

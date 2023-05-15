@@ -94,7 +94,7 @@ class TextCNN(TextModel):
       self.pool  = MaxPool1D(2, 2)
       self.conv2 = Conv1D(args.dim//2, args.dim, 3, 1, 'same')
     if args.type == '2d':
-      self.conv1 = Conv2D(args.embed_dim, args.dim//2, (3, 3), (1, 1), 'same')
+      self.conv1 = Conv2D(1, args.dim//2, (3, 3), (1, 1), 'same')
       self.pool  = MaxPool2D((2, 2), (2, 2))
       self.conv2 = Conv2D(args.dim//2, args.dim, (3, 3), (1, 1), 'same')
 
@@ -266,7 +266,7 @@ def test(args, model:Module, data_loader:Dataloader, logger:Logger) -> Score:
 
   model.eval()
   for X_np, Y_np in data_loader():
-    X, Y = to_tensor(X_np, Y_np)
+    X, Y = to_qtensor(X_np, Y_np)
   
     logits = model(X)
     pred = argmax(logits)
@@ -291,7 +291,7 @@ def valid(args, model:Module, creterion, data_loader:Dataloader, logger:Logger) 
 
   model.eval()
   for X_np, Y_np in data_loader():
-    X, Y = to_tensor(X_np, Y_np)
+    X, Y = to_qtensor(X_np, Y_np)
   
     logits = model(X)
     l = creterion(Y, logits)
@@ -314,7 +314,7 @@ def train(args, model:Module, optimizer, creterion, train_loader:Dataloader, tes
 
     model.train()
     for X_np, Y_np in train_loader():
-      X, Y = to_tensor(X_np, Y_np)
+      X, Y = to_qtensor(X_np, Y_np)
 
       optimizer.zero_grad()
       logits = model(X)
@@ -369,7 +369,6 @@ def go_train(args):
   analyzers = parse_analyzer(args.analyzer)
   vocab = unify_vocab(analyzers, args.min_freq)
   args.n_vocab = len(vocab) + 1  # <PAD>
-  args.n_class = N_CLASS
 
   # data
   train_loader = gen_dataloader(args, 'train', vocab)
@@ -436,27 +435,32 @@ def go_eval(args):
         result = json.load(fh)['scores']
 
 
-if __name__ == '__main__':
+def get_args():
   parser = ArgumentParser()
   parser.add_argument('-L', '--analyzer', choices=ANALYZERS, help='tokenize level')
   parser.add_argument('-M', '--model',                       help='model config string pattern')
   parser.add_argument('-N', '--length',     default=32,   type=int, help='model input length (in tokens)')
   parser.add_argument('-P', '--pad',        default='\x00',         help='model input pad')
   parser.add_argument('-D', '--embed_dim',  default=32,   type=int, help='model embed depth')
-  parser.add_argument('-E', '--epochs',     default=10,   type=int)
+  parser.add_argument('-E', '--epochs',     default=50,   type=int)
   parser.add_argument('-B', '--batch_size', default=32,   type=int)
   parser.add_argument('--lr',               default=1e-3, type=float)
   parser.add_argument('--min_freq',         default=5,    type=int, help='final vocab for embedding')
+  parser.add_argument('--n_class',    default=N_CLASS,    type=int, help='num of class')
   parser.add_argument('--eval', action='store_true', help='compare result scores')
-  args = parser.parse_args()
+  return parser.parse_args()
+
+
+if __name__ == '__main__':
+  args = get_args()
 
   if args.eval:
     go_eval(args)
     exit(0)
 
   if args.model.startswith('cnn'):
-    print('The TextCNN models are causing C-level kernel dump in loss.backward() !!')
-    print('Still do not know why, might be bugs of pyvqnet, so just ignore it :(')
-    exit(0)
+    print('The TextCNN models are possibly causing C-level kernel dump in loss.backward() !!')
+    print('Do not know why, might be bugs of pyvqnet :(')
+    print('=> please use `run_baseline_tc.py` instead :)')
 
   go_train(args)
