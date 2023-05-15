@@ -36,8 +36,10 @@ test_data = [
 vocab = { w: sum(txt.count(w) for _, txt in train_data) for w in words }
 
 
-def preview_dataset(args):
-  ''' see run_quantum.gen_dataloader() '''
+def go_all(args):
+  global vocab
+
+  # preprocess: see run_quantum.gen_dataloader()
   tokenizer, aligner, word2id, PAD_ID = get_preprocessor_pack(args, vocab)
   id2word = {v: k for k, v in word2id.items()}
 
@@ -48,32 +50,31 @@ def preview_dataset(args):
       Y_batch.append(np.eye(args.n_class)[lbl])
     return [np.stack(e, axis=0).astype(np.int32) for e in [T_batch, Y_batch]]
 
+  # dataset
   trainset = preprocess(train_data)
   validset = preprocess(test_data)
 
-  print('=' * 72)
-  print('vocab:', vocab)
-  print('word2id:', word2id)
-  print('id2word:', id2word)
-  print('trainset:')
-  print(trainset[0])
-  print(trainset[1])
-  print('validset:')
-  print(validset[0])
-  print(validset[1])
-  print('=' * 72)
+  if 'preview_dataset':
+    print('=' * 72)
+    print('vocab:', vocab)
+    print('word2id:', word2id)
+    print('id2word:', id2word)
+    print('trainset:')
+    print(trainset[0])
+    print(trainset[1])
+    print('validset:')
+    print(validset[0])
+    print(validset[1])
+    print('=' * 72)
 
-
-def go_train_proxy(args):
-  global vocab
-
+  # train
   trainset = [e[1] for e in train_data], [e[0] for e in train_data]
   testset  = [e[1] for e in test_data],  [e[0] for e in test_data]
   go_train(args, (vocab, trainset, testset), name_suffix=SUFFIX)
 
-
-def go_inspect_proxy(args):
+  # inspect
   go_inspect(args, name_suffix=SUFFIX)
+  plt.show()
 
 
 if __name__ == '__main__':
@@ -84,7 +85,7 @@ if __name__ == '__main__':
 
   # tunable
   args.epochs     = 70
-  args.n_repeat   = 1
+  args.n_repeat   = 2
   args.batch_size = 1
   args.lr         = 0.01
   args.grad_meth  = 'fd'
@@ -101,6 +102,4 @@ if __name__ == '__main__':
   args.log_interval  = 50
   args.test_interval = 50
 
-  preview_dataset(args)
-  go_train_proxy(args)
-  go_inspect_proxy(args)
+  go_all(args)

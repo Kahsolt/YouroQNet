@@ -138,7 +138,7 @@ def get_YouroQNet(args) -> QModelInit:
     n_qubit   = n_qubit_p + n_qubit_q
 
     # circuit
-    n_repeat  = args.repeat
+    n_repeat  = args.n_repeat
     SEC_rots  = [RY, RZ]    # can tune this
     SEC_entgl = CNOT        # NOTE: fixed for the moment
     CMC_rots  = [RY, RZ]    # can tune this
@@ -482,7 +482,7 @@ def get_args():
   parser.add_argument(      '--grad_dx',    default=0.01,     type=float, help='step size for finite_diff')
   parser.add_argument('-P', '--pad',        default='\x00',        help='model input pad')
   parser.add_argument('-N', '--length',     default=3,   type=int, help='model input length (in tokens)')
-  parser.add_argument('-D', '--repeat',     default=2,   type=int, help='circuit n_repeat, effecting embed depth')
+  parser.add_argument('-D', '--n_repeat',   default=2,   type=int, help='circuit n_repeat, effecting embed depth')
   parser.add_argument('-E', '--epochs',     default=10,  type=int)
   parser.add_argument('-B', '--batch_size', default=4,   type=int)
   parser.add_argument('--lr',               default=0.1, type=float)
