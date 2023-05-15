@@ -107,6 +107,7 @@ start_shell.cmd     # develop env entry
 
 # doc & lic
 README.md
+TECH.md             # techincal & theoretical stuff
 requirements_*.txt
 LICESE
 ```
