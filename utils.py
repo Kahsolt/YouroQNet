@@ -27,6 +27,7 @@ else:
 
 if 'pyvqnet & pyqpanda':
   from pyqpanda import CPUQVM, Qubit, QVec, ClassicalCondition
+  from pyqpanda import QGate as QGateBase
   from pyvqnet.tensor import QTensor
   from pyvqnet.nn import Module
   from pyvqnet.qnn.quantumlayer import QuantumLayer
@@ -60,6 +61,7 @@ GRAD_METH = {
 if 'typing':
   # quantum
   QVM         = CPUQVM
+  QGate       = Callable[[Qubit, Any], QGateBase]
   QModel      = QuantumLayer
   QModelInit  = Tuple[Callable, Any, int, int]   # compute_circuit(), creteron_cls, n_qubit, n_param
   Qubits      = Union[List[Qubit], QVec]

@@ -22,10 +22,9 @@ def get_args_best_config():
   args.min_freq   = 5
   # model
   args.model      = 'Youro'
-  args.length     = 32
-  args.embed_dim  = 32
+  args.n_len      = 16
   # train
-  args.batch_size = 32
+  args.batch_size = 4
   args.epochs     = 10
   args.lr         = 0.1
   # infer

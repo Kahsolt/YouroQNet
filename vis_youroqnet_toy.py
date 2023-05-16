@@ -3,7 +3,6 @@
 # Create Time: 2023/05/15 
 
 from run_quantum import *
-from run_baseline_vq import get_preprocessor_pack
 
 # NOTE: the toy dataset on the minimal YouroQNet for conceptual verification
 
@@ -89,18 +88,25 @@ if __name__ == '__main__':
   print('>> warn: some cmdline args for the toy YouorQNet is fixed hard-coded')
   print('>>       you must modify the code to change them, cannot passing by cmdline :)')
 
-  # tunable
-  args.epochs     = 75
+  # model
   args.n_repeat   = 1
+  args.embed_var  = 0.2
+  args.embed_norm = 1
+  args.SEC_rots   = 'RX'
+  args.SEC_entgl  = 'CNOT'
+  args.CMC_rots   = 'RX'
+  # train
+  args.epochs     = 75
   args.batch_size = 1
   args.lr         = 0.01
+  args.optim      = 'SGD'
   args.grad_meth  = 'fd'
   args.grad_dx    = 0.01
 
-  # fixed
+  # should be fixed
   args.analyzer      = 'user'
   args.model         = 'Youro'
-  args.length        = 3
+  args.n_len         = 3
   args.min_freq      = 1
   args.n_class       = 2
   args.n_vote        = 1

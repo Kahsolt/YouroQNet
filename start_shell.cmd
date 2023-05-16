@@ -1,6 +1,6 @@
 @ECHO OFF
 SET MODE_DEV=1
-SET RAND_SEED=114514
+SET RAND_SEED=-1
 
 REM use this script to startup deveopment env :)
 
