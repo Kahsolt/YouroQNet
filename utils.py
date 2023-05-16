@@ -4,7 +4,7 @@
 
 import os
 MODE_DEV  = os.environ.get('MODE_DEV')
-RAND_SEED = os.environ.get('RAND_SEED', -1)
+RAND_SEED = int(os.environ.get('RAND_SEED', -1))
 
 import random
 from pathlib import Path
@@ -242,7 +242,7 @@ def load_dataset(split:str, normalize:bool=True, fp:Path=None, seed:int=RAND_SEE
   df = pd.read_csv(fp)
   c_lbl, c_txt = df.columns[0], df.columns[-1]
   if split == 'valid':    # the whole valid set is too large
-    df = pd.concat([df_cls.sample(n=1000, random_state=seed) for _, df_cls in df.groupby(c_lbl)])
+    df = pd.concat([df_cls.sample(n=1000, random_state=abs(seed)) for _, df_cls in df.groupby(c_lbl)])
   Y = df[c_lbl].to_numpy().astype(np.int32)
   T = df[c_txt].to_numpy().tolist()
   if normalize: T = [clean_text(t) for t in T]

@@ -202,8 +202,6 @@ def get_YouroQNet(args) -> QModelInit:
       args.n_qubit_q   = n_qubit_q
       args.n_qubit     = n_qubit
       args.n_repeat    = n_repeat
-      args.n_param_SEC = n_param_SEC
-      args.n_param_CMC = n_param_CMC
       args.n_param_tht = n_param_tht
       args.n_param_psi = n_param_psi
       args.n_param     = n_param
@@ -464,7 +462,8 @@ def go_train(args, user_vocab_data:Tuple[Vocab, Dataset, Dataset]=None, name_suf
   else:
     train_loader = gen_dataloader(args, load_dataset('train'), vocab, shuffle=True)
     test_loader  = gen_dataloader(args, load_dataset('test'),  vocab)
-    valid_loader = gen_dataloader(args, load_dataset('valid'), vocab)
+    if MODE_DEV:
+      valid_loader = gen_dataloader(args, load_dataset('valid'), vocab)
 
   # model & optimizer & loss
   model, criterion = get_model_and_criterion(args)    # criterion accepts onehot label as truth

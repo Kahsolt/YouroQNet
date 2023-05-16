@@ -1,4 +1,4 @@
-7z a -t7z ^
+7z u -t7z ^
   -mx9 ^
   -xr!*.7z ^
   -xr!ref\*.pptx ^
