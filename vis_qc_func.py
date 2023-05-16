@@ -55,16 +55,18 @@ def qc_toy(qv:Qubits, param:NDArray) -> QCircuit:
   ''' the concrete 4qubit-1repeat [RY]-CNOT-[RY] toy YouroQNet '''
 
   tht = param
-  psi = np.linspace(0, pi/2, 8)
+  #psi = np.linspace(pi/4, pi/2, 8)
+  np.random.seed(114514)
+  psi = np.random.normal(size=[8])
 
   qc = QCircuit()
   qc << RY(qv[0], psi[0])
   qc << RY(qv[1], tht[0]) \
      << RY(qv[2], tht[1]) \
      << RY(qv[3], tht[2])
-  qc << CNOT(qv[0], qv[1]) \
-     << CNOT(qv[1], qv[2]) \
-     << CNOT(qv[2], qv[0])
+  qc << CNOT(qv[1], qv[2]) \
+     << CNOT(qv[2], qv[3]) \
+     << CNOT(qv[3], qv[1])
   qc << RY(qv[1], psi[1]).control(qv[0]) \
      << RY(qv[2], psi[2]).control(qv[0]) \
      << RY(qv[3], psi[3]).control(qv[0])
