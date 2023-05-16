@@ -153,6 +153,11 @@ LICESE
   - QPanda: [https://github.com/OriginQ/QPanda-2](https://github.com/OriginQ/QPanda-2)
   - pyQPanda: [https://pyqpanda-toturial.readthedocs.io/zh/latest/](https://pyqpanda-toturial.readthedocs.io/zh/latest/)
   - pyVQNet: [https://vqnet20-tutorial.readthedocs.io/en/main/index.html](https://vqnet20-tutorial.readthedocs.io/en/main/index.html)
+- QCNN related:
+  - tensorflow-quantum impl: [https://www.tensorflow.org/quantum/tutorials/qcnn](https://www.tensorflow.org/quantum/tutorials/qcnn)
+  - pytorch + qiskit impl: [https://github.com/YPadawan/qiskit-hackathon](https://github.com/YPadawan/qiskit-hackathon)
+  - pytorch + pennylane impl: [https://github.com/christorange/QC-CNN](https://github.com/christorange/QC-CNN)
+- Tiny-Q: [https://github.com/Kahsolt/Tiny-Q](https://github.com/Kahsolt/Tiny-Q)
 
 => find thesis of related work in [ref/init_thesis.cmd](ref/init_thesis.cmd)  
 => find implementations of related work in [repo/init_repos.cmd](repo/init_repos.cmd)  
