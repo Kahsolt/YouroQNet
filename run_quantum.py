@@ -16,6 +16,9 @@ if 'pyvqnet & pyqpanda':
   from pyqpanda import CR, CU, RXX, RYY, RZZ, RZX
   from pyqpanda import BARRIER
   from pyqpanda import draw_qprog, draw_qprog_text
+  # basic
+  from pyvqnet import tensor
+  from pyvqnet.tensor import QTensor
   # qnn
   from pyvqnet.qnn.quantumlayer import QuantumLayer, QuantumLayerWithQProg, QuantumLayerMultiProcess, QuantumLayerV2, grad
   # optimizing
@@ -170,7 +173,8 @@ def get_YouroQNet(args) -> QModelInit:
 
   if 'hparam':
     # qubits: |p> for context, |q> for data buffer
-    n_qubit_p = int(np.ceil(np.log2(args.n_class)))     # FIXME: need at leaset `n_class - 1`` qubits
+    #n_qubit_p = int(np.ceil(np.log2(args.n_class)))     # FIXME: need at leaset `n_class - 1`` qubits
+    n_qubit_p = args.n_class
     n_qubit_q = args.n_len
     n_qubit   = n_qubit_p + n_qubit_q
 
@@ -349,6 +353,17 @@ def embed_norm(args, x:NDArray) -> NDArray:
   if not args.embed_norm: return x
   return (2 * np.arctan(x)) * args.embed_norm        # [-k*pi, k*pi]
 
+def prob_joint_to_marginal(x:QTensor) -> QTensor:
+  ''' probability distribution projection '''
+  B, D = x.shape
+  if D == 2:
+    # for binary clf, keep it [B, D=2]
+    return x
+  else:
+    # for multi-clf, accumulate joint-distro to marginal-distro [B, D=16=2^4] => [B, D=4=NC]
+    NC = int(np.sqrt(D))
+    return tensor.stack([x[:, 2**k] for k in range(NC)], axis=1)
+
 
 def test(args, model:QModel, criterion, test_loader:Dataloader, logger:Logger) -> Metrics:
   Y_true, Y_pred = [], []
@@ -358,9 +373,10 @@ def test(args, model:QModel, criterion, test_loader:Dataloader, logger:Logger) -
   for X_np, Y_np in test_loader():
     X, Y = to_qtensor(X_np, Y_np)
   
-    logits = model(X)
-    l = criterion(Y, logits)
-    pred = argmax(logits)
+    joint_probs = model(X)
+    probs = prob_joint_to_marginal(joint_probs)
+    l = criterion(Y, probs)
+    pred = argmax(probs)
 
     Y_true.extend(   Y.to_numpy().argmax(-1).tolist())
     Y_pred.extend(pred.to_numpy().tolist())
@@ -391,12 +407,20 @@ def train(args, model:QModel, optimizer, criterion, train_loader:Dataloader, tes
       X, Y = to_qtensor(X_np, Y_np)
 
       optimizer.zero_grad()
-      logits = model(X)
-      l = criterion(Y, logits)
+      joint_probs = model(X)
+      probs = prob_joint_to_marginal(joint_probs)
+      l = criterion(Y, probs)
       l.backward()
       optimizer._step()
 
-      pred = argmax(logits)
+      pred = argmax(probs)
+
+      if 'debug':
+        print('probs:', probs)
+        print('Y:', Y)
+        print('true:', Y_np.argmax(-1))
+        print('pred:', pred.to_numpy().astype(np.int32))
+
       ok  += (Y_np.argmax(-1) == pred.to_numpy().astype(np.int32)).sum()
       tot += len(Y_np) 
       loss += l.item()
@@ -433,9 +457,10 @@ def infer(args, model:QModel, sent:str, tokenizer:Tokenizer, word2id:Vocab) -> V
   choose_sp = possible_sp if len(possible_sp) <= args.n_vote else random.sample(possible_sp, args.n_vote)
   X_np = np.stack([ ids[sp:sp+args.n_len] for sp in choose_sp ], axis=0)   # [V, mL=16]
 
-  X = to_qtensor(X_np)   # [V, mL]
-  logits = model(X)     # [V, NC]
-  pred = argmax(logits) # [V]
+  X = to_qtensor(X_np)    # [V, mL]
+  joint_probs = model(X)  # [V, 2^NC]
+  probs = prob_joint_to_marginal(joint_probs)
+  pred = argmax(probs)   # [V]
   votes = pred.to_numpy().tolist()
   return votes
 
@@ -582,24 +607,24 @@ def get_args():
   parser.add_argument('--min_freq',       default=5, type=int, help='min_freq for final embedding vocab')
   # model
   parser.add_argument('-M', '--model', default='Youro',   choices=MODELS, help='model name')
-  parser.add_argument('--n_len',       default=3,         type=int,       help='model input length (in tokens), aka. n_qubit_q')
+  parser.add_argument('--n_len',       default=8,         type=int,       help='model input length (in tokens), aka. n_qubit_q')
   parser.add_argument('--n_class',     default=N_CLASS,   type=int,       help='num of class, aka. n_qubit_p')
-  parser.add_argument('--n_repeat',    default=2,         type=int,       help='circuit n_repeat, effecting embed depth')
+  parser.add_argument('--n_repeat',    default=1,         type=int,       help='circuit n_repeat, effecting embed depth')
   parser.add_argument('--embed_var',   default=0.2,       type=float,     help='embedding params init variance (normal)')
   parser.add_argument('--embed_norm',  default=1,         type=float,     help='embedding out value normalize, fatcor of pi (1 means [-pi, pi]); set 0 to disable')
   parser.add_argument('--SEC_rots',    default='RY,RZ',   help=f'choose multi from {VALID_SEC_ROTS}, comma seperate')
   parser.add_argument('--SEC_entgl',   default='CNOT',    help=f'choose one from {VALID_SEC_ENTGL}')
   parser.add_argument('--CMC_rots',    default='RY,RZ',   help=f'choose multi from {VALID_CMC_ROTS}, comma seperate')
   # train
-  parser.add_argument('-O', '--optim',      default='SGD', choices=['SGD', 'Adam'],  help='optimizer')
-  parser.add_argument('-G', '--grad_meth',  default='fd',  choices=GRAD_METH.keys(), help='grad method')
-  parser.add_argument(      '--grad_dx',    default=0.01,  type=float, help='step size for finite_diff')
-  parser.add_argument('-E', '--epochs',     default=10,  type=int)
-  parser.add_argument('-B', '--batch_size', default=4,   type=int)
-  parser.add_argument('--lr',               default=0.1, type=float)
-  parser.add_argument('--slog_interval',    default=10,  type=int, help='log loss/acc')
-  parser.add_argument('--log_interval',     default=50,  type=int, help='log & reset loss/acc')
-  parser.add_argument('--test_interval',    default=200, type=int, help='test on valid split')
+  parser.add_argument('-O', '--optim',      default='Adam', choices=['SGD', 'Adam'],  help='optimizer')
+  parser.add_argument('-G', '--grad_meth',  default='fd',   choices=GRAD_METH.keys(), help='grad method')
+  parser.add_argument(      '--grad_dx',    default=0.01,   type=float, help='step size for finite_diff')
+  parser.add_argument('--lr',               default=0.1,    type=float)
+  parser.add_argument('-E', '--epochs',     default=1,      type=int)
+  parser.add_argument('-B', '--batch_size', default=4,      type=int)
+  parser.add_argument('--slog_interval',    default=10,     type=int, help='log loss/acc')
+  parser.add_argument('--log_interval',     default=50,     type=int, help='log & reset loss/acc')
+  parser.add_argument('--test_interval',    default=200,    type=int, help='test on valid split')
   # infer
   parser.add_argument('--n_vote', default=5, type=int, help='max number of voters at inference time')
   # misc
