@@ -8,13 +8,40 @@ from run_quantum import *
 
 SUFFIX = '_toy'
 
+# NOTE: ablation verify, when learning is successful (check the loss curve), there are some evidental phenomenon
+#   'neu': the unbaised normal setting, which side to bias depends on dataset
+#   'pos': bais neutral pronouns to positive group, likely 恨/讨厌 will be highlighted out
+#   'neg': bais neutral pronouns to negative group, likely 爱/喜欢 will be highlighted out
+setting = 'neu'
+
+if setting == 'neu':
+  baised_data = []
+if setting == 'pos':
+  baised_data = [
+    (0, '我你'),
+    (0, '你啊'),
+    (0, '啊我啊啊'),
+    (0, '西瓜苹果'),
+    (0, '你西瓜'),
+    (0, '我苹果啊'),
+  ]
+if setting == 'neg':
+  baised_data = [
+    (1, '我你'),
+    (1, '你啊'),
+    (1, '啊我啊啊'),
+    (1, '西瓜苹果'),
+    (1, '你西瓜'),
+    (1, '我苹果啊'),
+  ]
+
 words = {
   # positive (leading to class 0)
   '爱', '喜欢',
-  # negetive (leading to class 1)
+  # negative (leading to class 1)
   '恨', '讨厌',
   # neutral
-  '我', '你', '苹果', '西瓜', '啊',
+  '啊', '我', '你', '苹果', '西瓜',
 }
 train_data = [
   (0, '我爱你'),
@@ -24,8 +51,8 @@ train_data = [
   (1, '你讨厌我'),
   (1, '讨厌西瓜苹果'),
   (1, '你讨厌苹果'),
-  (1, '我恨恨恨'),
-]
+  (1, '我恨啊恨'),
+] + baised_data
 test_data = [
   (0, '西瓜喜欢'),
   (0, '我喜欢喜欢'),
@@ -85,21 +112,18 @@ def go_all(args):
 if __name__ == '__main__':
   args = get_args()
 
-  print('>> warn: some cmdline args for the toy YouorQNet is fixed hard-coded')
-  print('>>       you must modify the code to change them, cannot passing by cmdline :)')
-
   # model
   args.n_repeat   = 1
   args.embed_var  = 0.2
   args.embed_norm = 1
-  args.SEC_rots   = 'RX'
+  args.SEC_rots   = 'RY'
   args.SEC_entgl  = 'CNOT'
-  args.CMC_rots   = 'RX'
+  args.CMC_rots   = 'RY'
   # train
   args.epochs     = 75
   args.batch_size = 1
   args.lr         = 0.01
-  args.optim      = 'SGD'
+  args.optim      = 'Adam'
   args.grad_meth  = 'fd'
   args.grad_dx    = 0.01
 
@@ -115,3 +139,6 @@ if __name__ == '__main__':
   args.test_interval = 50
 
   go_all(args)
+
+  print('>> warn: some cmdline args for the toy YouorQNet is fixed hard-coded')
+  print('>>       you must modify the code to change them, cannot passing by cmdline :)')

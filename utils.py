@@ -55,7 +55,7 @@ ANALYZERS = [
 ]
 GRAD_METH = {
   'fd': 'finite_diff',
-  'ps': 'parameter_shift',
+  'ps': 'parameter_shift',    # NOTE: this does not work in most cases
 }
 
 if 'typing':
@@ -282,11 +282,11 @@ def plot_loss_and_acc(losses_and_accs:LossesAccs, fp:str=None, title:str='') -> 
 
   plt.clf()
   ax = plt.axes()
-  ax.plot( losses, 'dodgerblue', label='train loss')
-  ax.plot(tlosses, 'b',          label='test loss')
+  ax.plot( losses, 'lightskyblue', label='train loss')
+  ax.plot(tlosses, 'b',            label='test loss')
   ax2 = ax.twinx()
-  ax2.plot( accs, 'orangered', label='train acc')
-  ax2.plot(taccs, 'r',         label='test acc')
+  ax2.plot( accs, 'lightsalmon', label='train acc')
+  ax2.plot(taccs, 'r',           label='test acc')
   plt.legend()
   plt.suptitle(title)
 
