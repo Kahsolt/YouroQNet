@@ -4,6 +4,8 @@
 
 from run_baseline_sk import *
 
+# data visualization through PCA/TSNE projection
+
 METHODS = {
   'pca':    lambda: PCA      (n_components=3),
   'kpca-l': lambda: KernelPCA(n_components=3, kernel='linear'),

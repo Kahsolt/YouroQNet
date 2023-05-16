@@ -5,6 +5,8 @@
 from mk_vocab import *
 from utils import DATA_PATH, SPLITS, clean_text
 
+# interactive demo for the adaptive k-gram tokenizer
+
 
 def run_tokenize_dataset():
   for split in SPLITS:
@@ -17,7 +19,6 @@ def run_tokenize_dataset():
         segs = tokenizer(t, top_k=None)
         fh.write(' '.join(segs) + '\n')
     print(f'>> save to {fp}...')
-
 
 def run_tokenize_interactive():
   tokenizer = make_tokenizer()  # default to kgram

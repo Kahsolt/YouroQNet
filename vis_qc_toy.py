@@ -17,7 +17,7 @@ from pyvqnet.nn import MeanSquaredError
 
 from utils import TMP_PATH, GRAD_METH, savefig
 
-# NOTE: a toy qdrl_circuit approximating arbitary normalized prob-dist
+# NOTE: a toy qdrl_circuit approximating arbitary normalized prob-dist, showing capability of QNNs
 
 # make a triple-face coin: equal prob of [00, 01, 10]
 #pdf = [0, 1/3, 1/3, 1/3]
@@ -72,7 +72,7 @@ def train(args):
   # model & optim
   qdrl_circuit = partial(make_qdrl_circuit, args.n_repeat)
   model = QuantumLayer(qdrl_circuit, args.param_num, 'cpu', args.qubit_num, 0, GRAD_METH[args.grad_meth], args.grad_dx)
-  if 'custom init':
+  if not 'custom init':
     params = model.m_para
     n_params = np.cumprod(params.shape).item()
     init_params = np.linspace(0, np.pi, n_params).reshape(params.shape)

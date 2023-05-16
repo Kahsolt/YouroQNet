@@ -2,16 +2,12 @@
 # Author: Armit
 # Create Time: 2023/04/21 
 
-from argparse import ArgumentParser
-from typing import Callable
+from pyvqnet.qnn import grad as grad_param_shift
 
-import numpy as np
+from vis_qc_func import qc_test
+from vis_qc_func import *
 
-from pyqpanda import CPUQVM, QCircuit, QProg
-from pyqpanda import H, X, Y, Z, CNOT, SWAP, RX, RY, RZ, CR, CP
-from pyvqnet.qnn import ProbsMeasure, grad as grad_param_shift
-
-from utils import timer
+# vqc in a fucntional view (first order gradient)
 
 # error comparation:
 #   |  dx  |   grad error   |
@@ -23,27 +19,7 @@ from utils import timer
 #   | 1e-6 | 8.273372760-08 |
 
 
-if 'QCircuit as function f()':
-  qvm = CPUQVM()
-  qvm.init_qvm()
-  qv = qvm.qAlloc_many(2)
-
-  def pqctest(param):
-    global qvm, qv
-
-    qc = QCircuit() \
-      << RX(qv[0], param[0]) \
-      << RY(qv[1], param[1]) \
-      << CNOT(qv[0], qv[1]) \
-      << RX(qv[1], param[2])
-    prog = QProg() << qc
-
-    return ProbsMeasure([1], prog, qvm, qv)
-
-  f = lambda x: np.asarray(pqctest(x))
-
-
-def grad_finite_diff(f:Callable, x:np.ndarray, dx:float=0.01) -> np.ndarray:
+def grad_finite_diff(f:Callable, x:NDArray, dx:float=0.01) -> NDArray:
   '''
     approximated grad by finite_diff
     => grad.shape: [n_param, n_output]
@@ -98,6 +74,14 @@ if __name__ == '__main__':
   parser.add_argument('--n_bench', type=int, default=0,      help='bench mark the error')
   parser.add_argument('--seed',    type=int, default=114514, help='seed for bench mark')
   args = parser.parse_args()
+
+  if 'qvm':
+    qvm = CPUQVM()
+    qvm.init_qvm()
+    qv = qvm.qAlloc_many(2)
+
+  if 'vqc characteristic function':
+    f = lambda x: np.asarray(ProbsMeasure([1], QProg() << qc_test(qv, x), qvm, qv))
 
   if args.n_bench > 0:
     bench_mark(args)

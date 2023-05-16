@@ -4,7 +4,7 @@
 
 from run_quantum import *
 
-# NOTE: the toy dataset on the minimal YouroQNet for conceptual verification
+# NOTE: the toy YouroQNet with toy dataset for conceptual verification and ablation study
 
 SUFFIX = '_toy'
 
@@ -112,6 +112,9 @@ def go_all(args):
 if __name__ == '__main__':
   args = get_args()
 
+  print('>> Configs for the toy YouorQNet is finetuned, fixed and hard-coded, for further theoretical study :)')
+  print('>> Be careful if you wanna modify this code indeed!! (e.g. make backups)')
+
   # model
   args.n_repeat   = 1
   args.embed_var  = 0.2
@@ -139,6 +142,3 @@ if __name__ == '__main__':
   args.test_interval = 50
 
   go_all(args)
-
-  print('>> warn: some cmdline args for the toy YouorQNet is fixed hard-coded')
-  print('>>       you must modify the code to change them, cannot passing by cmdline :)')

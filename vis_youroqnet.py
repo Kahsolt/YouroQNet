@@ -9,6 +9,8 @@ BASE_PATH = Path(__file__).parent
 import sys ; sys.path.append(str(BASE_PATH))
 from run_quantum import get_args, go_infer, mode, Inferer
 
+# interactive demo for the YouroQNet text classifier
+
 LABEL_NAMES = {
   0: 'Joy',
   1: 'Angry',

@@ -10,32 +10,22 @@ from numpy import pi
 import matplotlib.pyplot as plt
 
 from pyqpanda import CPUQVM, QCircuit, QProg
-from pyqpanda import deep_copy
 from pyqpanda import H, X, Y, Z, CNOT, SWAP, RX, RY, RZ, CR, CP
 from pyvqnet.qnn import ProbsMeasure
-from pyvqnet.qnn import RandomTemplate
+from pyqpanda import deep_copy
 
-from utils import TMP_PATH, timer, savefig
+from utils import TMP_PATH, timer, savefig, NDArray, Qubits
+
+# vqc in a fucntional view
 
 
-if 'qvm':
-  qvm = CPUQVM()
-  qvm.init_qvm()
-  qv = qvm.qAlloc_many(2)
-
-  
-def qc_simple(param):
-  global qvm, qv
-
+def qc_simple(qv:Qubits, param:NDArray) -> QCircuit:
   qc = QCircuit() \
     << RX(qv[0], param[0]) \
-    << RX(qv[0], np.pi/3)
+    << RX(qv[0], pi/3)
+  return qc
 
-  return ProbsMeasure([0], QProg() << qc, qvm, qv)
-
-def qc_complex(param):
-  global qvm, qv
-
+def qc_complex(qv:Qubits, param:NDArray) -> QCircuit:
   qc = QCircuit()
   qc << RX(qv[0], param[0])
   qc << RZ(qv[0], pi/2)
@@ -51,20 +41,38 @@ def qc_complex(param):
   qc << deep_copy(qc)
   qc << deep_copy(qc)
   qc << deep_copy(qc)
+  return qc
 
-  return ProbsMeasure([0], QProg() << qc, qvm, qv)
+def qc_test(qv:Qubits, param:NDArray) -> QCircuit:
+  qc = QCircuit() \
+    << RX(qv[0], param[0]) \
+    << RY(qv[1], param[1]) \
+    << CNOT(qv[0], qv[1]) \
+    << RX(qv[1], param[2])
+  return qc
 
-def qc_rand(param, seed=114514):
-  global qvm, qv
+def qc_toy(qv:Qubits, param:NDArray) -> QCircuit:
+  ''' the concrete 4qubit-1repeat [RY]-CNOT-[RY] toy YouroQNet '''
 
-  weights = param.reshape(1, -1)
-  weights = np.repeat(weights, 10)
-  weights = param.reshape(1, -1)
-  qct = RandomTemplate(weights, num_qubits=2, seed=seed)
-  qc = qct.create_circuit(qv)
-  print(qc)
+  tht = param
+  psi = np.linspace(0, pi/2, 8)
 
-  return ProbsMeasure([0], QProg() << qc, qvm, qv) 
+  qc = QCircuit()
+  qc << RY(qv[0], psi[0])
+  qc << RY(qv[1], tht[0]) \
+     << RY(qv[2], tht[1]) \
+     << RY(qv[3], tht[2])
+  qc << CNOT(qv[0], qv[1]) \
+     << CNOT(qv[1], qv[2]) \
+     << CNOT(qv[2], qv[0])
+  qc << RY(qv[1], psi[1]).control(qv[0]) \
+     << RY(qv[2], psi[2]).control(qv[0]) \
+     << RY(qv[3], psi[3]).control(qv[0])
+  qc << RY(qv[0], psi[4])
+  qc << RY(qv[0], psi[5]).control(qv[1]) \
+     << RY(qv[0], psi[6]).control(qv[2]) \
+     << RY(qv[0], psi[7]).control(qv[3])
+  return qc
 
 
 if 'grid queryer':
@@ -72,7 +80,6 @@ if 'grid queryer':
   def grid_query_2d(f:Callable):
     X, Y, O = [], [], []
 
-    #rng = np.linspace(-1, 1, args.n_plot)
     rng = np.linspace(-np.pi, np.pi, args.n_plot)
     for x in rng:
       for y in rng:
@@ -85,28 +92,21 @@ if 'grid queryer':
 
   @timer
   def grid_query_3d(f:Callable):
-    X, Y, Z = [], [], []
-    O0, O1  = [], []
+    X, Y, Z, O = [], [], [], []
 
     rng = np.linspace(-np.pi, np.pi, args.n_plot)
     for x in rng:
       for y in rng:
         for z in rng:
           xyz = np.asarray([x, y, z])
-          o0, o1 = f(xyz)
+          o, _ = f(xyz)
           X .append(x)
           Y .append(y)
           Z .append(z)
-          O0.append(o0)
-          O1.append(o1)
-    return [np.asarray(e) for e in [X, Y, Z, O0, O1]]
+          O.append(o)
+    return [np.asarray(e) for e in [X, Y, Z, O]]
 
-
-def plot_qc_func(args):
-  g = lambda x: np.asarray(globals()[f'qc_{args.name}'](x))
-
-  X, Y, O = grid_query_2d(g)
-  if 'stats':
+  def stats_O(O:np.array, name:str):
     print('max:', O.max())
     print('min:', O.min())
     print('avg:', O.mean())
@@ -115,45 +115,68 @@ def plot_qc_func(args):
     plt.clf()
     plt.hist(O.flatten(), bins=100)
     plt.suptitle('vis_qc_func_hist')
-    savefig(TMP_PATH / 'vis_qc_func_hist.png')
+    savefig(TMP_PATH / f'vis_qc_func_{name}_hist.png')
 
-  rng = O.max() - O.min()
-  if rng < 1e-5: O = np.zeros_like(O) + (rng / 2)
 
-  plt.clf()
-  plt.scatter(X, Y, s=10, c=O, alpha=0.7, cmap='bwr')
-  plt.suptitle('vis_qc_func')
-  savefig(TMP_PATH / 'vis_qc_func.png')
-  plt.show()
+def plot_qc_func(args):
+  qct = globals()[f'qc_{args.name}']
+  if 'print_circuit_once':
+    print(qct(qv, np.zeros([args.dim])))
+  f = lambda x: np.asarray(ProbsMeasure([0], QProg() << qct(qv, x), qvm, qv))
 
-def plot_qc_f(args):   # use the pre-defined `f`
-  from vis_qc_grad import f
+  if args.dim == 2:
+    X, Y, O = grid_query_2d(f)
+    stats_O(O, args.name)
 
-  X, Y, Z, O0, O1 = grid_query_3d(f)
-  Omax = max(O0.max(), O1.max())
-  Omin = min(O0.min(), O1.min())
-  O0 = (O0 - Omin) / (Omax - Omin)
-  O1 = (O1 - Omin) / (Omax - Omin)
+    rng = O.max() - O.min()
+    if rng < 1e-5: O = np.zeros_like(O) + (rng / 2)
 
-  for i in range(2):
-    O = locals()[f'O{i}']
+    plt.clf()
+    plt.scatter(X, Y, s=10, c=O, alpha=0.7, cmap='bwr')
+    plt.suptitle(f'vis_qc_func_{args.name}')
+    savefig(TMP_PATH / f'vis_qc_func_{args.name}.png')
+    plt.show()
+
+  elif args.dim == 3:
+    args.n_plot = 30
+
+    X, Y, Z, O = grid_query_3d(f)
+    stats_O(O, args.name)
+
+    rng = O.max() - O.min()
+    if rng < 1e-5: O = np.zeros_like(O) + (rng / 2)
+
     plt.clf()
     ax = plt.axes(projection='3d')
     ax.scatter(X, Y, Z, zdir='z', s=10, c=O, alpha=0.7, cmap='bwr')
-    plt.suptitle(f'vis_qc_func_f_{i}')
-    savefig(TMP_PATH / f'vis_qc_func_f_{i}.png')
+    plt.suptitle(f'vis_qc_func_{args.name}')
+    savefig(TMP_PATH / f'vis_qc_func_{args.name}.png')
     plt.show()
 
 
 if __name__ == '__main__':
+  NAMES = [name[len('qc_'):] for name in globals() if name.startswith('qc_')]
+
   parser = ArgumentParser()
-  parser.add_argument('-N', '--n_plot', type=int, default=100, help='grid sample and plot the qcircuit function')
-  parser.add_argument('-C', '--name', default='simple', help='pre-defined qcircuit name')
-  parser.add_argument('--f', action='store_true', help='use the 3-param qcircuit pre-defined in vis_qc_grad.py')
+  parser.add_argument('-N', '--n_plot', type=int, default=100, help='grid sample density')
+  parser.add_argument('-C', '--name', default='toy', choices=NAMES, help='pre-defined qcircuit name')
   args = parser.parse_args()
 
-  if args.f:
-    args.n_plot = 30
-    plot_qc_f(args)
-  else:
-    plot_qc_func(args)
+  configs = {
+    # (n_qbuit, n_dim)
+    'simple':  (2, 2),
+    'complex': (2, 2),
+    'toy':     (4, 3),
+    'f':       (2, 3),
+  }
+  args.qubit, args.dim = configs[args.name]
+
+  print_circuit_once = True
+
+  if 'qvm':
+    qvm = CPUQVM()
+    qvm.init_qvm()
+    qv = qvm.qAlloc_many(args.qubit)
+
+  print(vars(args))
+  plot_qc_func(args)
