@@ -2,7 +2,6 @@
 # Author: Armit
 # Create Time: 2023/05/05 
 
-import random
 from pathlib import Path
 from pprint import pformat
 from argparse import ArgumentParser
@@ -47,7 +46,7 @@ if 'pyvqnet':
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 
 from utils import *
-from mk_vocab import make_tokenizer, load_vocab, truncate_vocab, Vocab, VocabI, PreprocessPack
+from run_quantum import get_vocab, gen_dataloader
 
 
 class TextModel(Module):
@@ -221,58 +220,6 @@ def get_model(args) -> Module:
     return TextRNN(args)
 
   raise ValueError(name)
-
-def get_vocab(args) -> Vocab:
-  analyzer: str = args.analyzer
-  analyzers = []
-  if analyzer.endswith('+'):
-    analyzers.append('char')
-    analyzer = analyzer[:-1]
-  analyzers.append(analyzer)
-
-  vocab = {}
-  for analyzer in analyzers:
-    vocab.update(load_vocab(LOG_PATH / analyzer / 'vocab.txt'))
-  if args.min_freq > 0:
-    vocab = truncate_vocab(vocab, args.min_freq)
-  return vocab
-
-def get_word2id(args, symbols:List[str]) -> VocabI:
-  if args.pad is not None: syms = [args.pad] + symbols
-  syms.sort()
-  word2id = { v: i for i, v in enumerate(syms) }
-  return word2id
-
-def get_preprocessor_pack(args, vocab:Vocab) -> PreprocessPack:
-  tokenizer = list if args.analyzer == 'char' else make_tokenizer(vocab) 
-  aligner = lambda x: align_words(x, args.length, args.pad)
-  word2id = get_word2id(args, list(vocab.keys()))
-  PAD_ID = word2id.get(args.pad, -1)
-  return tokenizer, aligner, word2id, PAD_ID
-
-def gen_dataloader(args, dataset:Dataset, vocab:Vocab, shuffle:bool=False) -> Dataloader:
-  preproc_pack = get_preprocessor_pack(args, vocab)
-
-  def iter_by_batch() -> Tuple[NDArray, NDArray]:
-    nonlocal args, dataset, preproc_pack, shuffle
-
-    T, Y = dataset
-    N = len(Y)
-    indexes = list(range(N))
-    if shuffle: random.shuffle(indexes) 
-
-    for i in range(0, N, args.batch_size):
-      T_batch, Y_batch = [], []
-      for j in range(args.batch_size):
-        if i + j >= N: break
-        idx = indexes[i + j]
-        T_batch.append(sent_to_ids (T[idx], preproc_pack))
-        Y_batch.append(id_to_onehot(Y[idx], args.n_class))
-
-      if len(T_batch) == args.batch_size:
-        yield [np.stack(e, axis=0).astype(np.int32) for e in [T_batch, Y_batch]]
-  
-  return iter_by_batch    # return a DataLoader generator
 
 
 def test(args, model:Module, data_loader:Dataloader, logger:Logger) -> Score:

@@ -4,7 +4,8 @@
 
 from run_baseline_vq import *
 
-# NOTE: VQNet impl of TextCNN does not work, we use torch instead
+# NOTE: thie file is parallel to `run_baseline_vq.py`
+# because VQNet impl of TextCNN does not work, we implement it again in torch
 
 if 'torch':
   import torch

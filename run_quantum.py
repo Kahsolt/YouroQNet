@@ -2,6 +2,7 @@
 # Author: Armit
 # Create Time: 2023/05/09 
 
+import random
 from pprint import pformat
 from argparse import ArgumentParser
 import warnings ; warnings.simplefilter("ignore")
@@ -16,25 +17,7 @@ if 'pyvqnet & pyqpanda':
   from pyqpanda import CNOT, CZ, SWAP, iSWAP, SqiSWAP, Toffoli
   from pyqpanda import RX, RY, RZ, P, U1, U2, U3, U4
   from pyqpanda import CR, CU, RXX, RYY, RZZ, RZX
-  S_GATES  = [X, Y, Z, I, H, S, T]
-  D_GATES  = [CNOT, CZ, SWAP, iSWAP, SqiSWAP]
-  T_GATES  = [Toffoli]
-  GATES    = S_GATES + D_GATES + T_GATES
-  S_PGATES = [RX, RY, RZ, P, U1, U2, U3, U4]
-  D_PGATES = [CR, CU, RXX, RYY, RZZ, RZX]
-  PGATES   = S_PGATES + D_PGATES 
-  def get_gate_param(gate:QGate) -> int:
-    ''' get the gate param count '''
-    if gate in GATES: return 0
-    if gate in [RX, RY, RZ, P, U1, CR, RXX, RYY, RZZ, RZX]: return 1
-    if gate in [U2]: return 2
-    if gate in [U3]: return 3
-    if gate in [U4, CU]: return 4
-    raise ValueError(gate)
-  def is_gate_ctrl(gate:QGate) -> bool:
-    ''' is the gate controllable '''
-    return gate in D_GATES + T_GATES + D_PGATES
-  # tensor
+# tensor
   from pyvqnet import tensor
   from pyvqnet.tensor import QTensor
   # basics
@@ -62,20 +45,65 @@ if 'pyvqnet & pyqpanda':
 import numpy as np
 
 from utils import *
-from mk_vocab import Vocab, Tokenizer, make_tokenizer
-from run_baseline_vq import get_vocab, get_word2id, gen_dataloader
+from mk_vocab import make_tokenizer, load_vocab, truncate_vocab, Vocab, VocabI, Tokenizer, PreprocessPack
+
+if 'gate const & utils':
+  S_GATES  = [X, Y, Z, I, H, S, T]
+  D_GATES  = [CNOT, CZ, SWAP, iSWAP, SqiSWAP]
+  T_GATES  = [Toffoli]
+  GATES    = S_GATES + D_GATES + T_GATES
+  S_PGATES = [RX, RY, RZ, P, U1, U2, U3, U4]
+  D_PGATES = [CR, CU, RXX, RYY, RZZ, RZX]
+  PGATES   = S_PGATES + D_PGATES
+
+  def get_gate_param(gate:QGate) -> int:
+    ''' get the gate param count '''
+    if gate in GATES: return 0
+    if gate in [RX, RY, RZ, P, U1, CR, RXX, RYY, RZZ, RZX]: return 1
+    if gate in [U2]: return 2
+    if gate in [U3]: return 3
+    if gate in [U4, CU]: return 4
+    raise ValueError(gate)
+
+  def is_gate_ctrl(gate:QGate) -> bool:
+    ''' is the gate controllable '''
+    return gate in D_GATES + T_GATES + D_PGATES
+  
+  def gates_to_names(gates:List[QGate]) -> List[str]:
+    ''' assert info print '''
+    return [g.__class__.__name__ if isinstance(g, QGate) else g for g in gates]
+  
+  def names_to_gates(names: Union[List[str], str]) -> List[QGate]:
+    ''' parse cmdline args '''
+    if isinstance(names, str): names = names.split(',')
+    return [globals().get(n, n) for n in names]
+
+  VALID_SEC_ROTS  = [RX, RY, RZ, P, U1, U2, U3, U4]
+  VALID_SEC_ENTGL = [CNOT, CZ, SWAP, iSWAP, SqiSWAP, CR, CU, RXX, RYY, RZZ, RZX] + [f'C{g.__class__.__name__}' for g in S_PGATES]
+  VALID_CMC_ROTS  = [RX, RY, RZ, P, U1, U2, U3, U4]
 
 class LogOnce:
   export_circuit = True
 
 
-def StrongEntangleCircuitTemplate(qv:Qubits, param:NDArray, rots:List[QGate]=[RY, RZ], entgl:QGate=CNOT) -> QCircuit:
-  ''' rotate each qubit in `qv` by `rots` respectively, then entangle them with `entgl` cyclically '''
+def StrongEntangleCircuitTemplate(qv:Qubits, param:NDArray, rots:List[QGate]=[RY], entgl:Union[QGate, str]=CZ) -> QCircuit:
+  '''
+    rotate each qubit in register `qv` by `rots` respectively, then entangle them with `entgl` cyclically
+      rots:  choose from [RX, RY, RZ, P, U1, U2, U3, U4]
+      entgl: choose from [CNOT, CZ, SWAP, iSWAP, SqiSWAP, CR, CU, RXX, RYY, RZZ, RZX] + ['CRX', 'CRY', 'CRZ', 'CP', 'CU1', 'CU2', 'CU3', 'CU4']
+  '''
   
   # sanity check
-  assert all([rot in S_PGATES for rot in rots]), 'rot must be a parameterized single-qubit gate'
-  #assert entgl in D_GATES + D_PGATES, 'engtl must be a double-qubit gate'
-  assert entgl is CNOT, 'engtl only support CNOT so far'
+  assert all([rot in S_PGATES for rot in rots]), f'rots must be parameterized single-qubit gates from {gates_to_names(S_PGATES)}'
+  if isinstance(entgl, QGate):
+    assert entgl in D_GATES + D_PGATES, f'engtl must be a double-qubit gate from {gates_to_names(D_GATES + D_PGATES)}'
+    entgl_has_control = True
+  else:
+    assert entgl.startswith('C'), 'engtl must name startswith "C" when passed as "str" type'
+    entgl: QGate = globals().get(entgl[1:])
+    assert entgl in S_PGATES, f'engtl must be a parameterized single-qubit gate from {gates_to_names(S_PGATES)}'
+    entgl_has_control = False
+
   nq = len(qv)
   param = param.reshape(nq, len(rots))
 
@@ -83,20 +111,28 @@ def StrongEntangleCircuitTemplate(qv:Qubits, param:NDArray, rots:List[QGate]=[RY
   # rotations
   for i in range(nq):
     for j, rot in enumerate(rots):
-      qc << rot(qv[i], param[i][j])
+      qc << rot(qv[i], *param[i][j])
   # entangles
-  for i in range(nq - 1):
-    qc << entgl(qv[i], qv[i + 1])
-  if nq >= 3:
-    qc << entgl(qv[i + 1], qv[0])   # loopback
+  if entgl_has_control:
+    for i in range(nq - 1):
+      qc << entgl(qv[i], qv[i + 1])
+    if nq >= 2:
+      qc << entgl(qv[i + 1], qv[0])   # loopback
+  else:
+    for i in range(nq - 1):
+      qc << entgl(qv[i + 1]).control(qv[i])
+    if nq >= 2:
+      qc << entgl(qv[0]).control(qv[i + 1])   # loopback
   return qc
 
 def ControlMultiCircuitTemplate(q:Qubit, qv:Qubits, param:NDArray, rots:List[QGate]=[RY, RZ]) -> QCircuit:
-  ''' rotate each target qubit in `qv` respectively, under the control of qubit `q` '''
+  '''
+    controlled-rotate each target qubit in register `qv` respectively, under the control of qubit `q`
+      rots:  choose from [RX, RY, RZ, P, U1, U2, U3, U4]
+  '''
   
   # sanity check
-  #assert entgl in D_GATES + D_PGATES, 'engtl must be a double-qubit gate'
-  assert all([rot in S_PGATES for rot in rots]), 'rot must be a parameterized single-qubit gate'
+  assert all([rot in S_PGATES for rot in rots]), f'rots must be parameterized single-qubit gates from {gates_to_names(S_PGATES)}'
   nq = len(qv)
   param = param.reshape(nq, len(rots))
 
@@ -107,11 +143,11 @@ def ControlMultiCircuitTemplate(q:Qubit, qv:Qubits, param:NDArray, rots:List[QGa
       qc << rot(qv[i], param[i][j]).control(q)
   return qc
 
-def compute_circuit(cq:QCircuit, qv:Qubits, qvm:QVM, mbit:int=1) -> Probs:
+def compute_circuit(cq:QCircuit, qv:Qubits, qvm:QVM, mbit:int=1, use_qnn_measure:bool=True) -> Probs:
   ''' set mbit to measure on the first m-qubits '''
 
   prog = QProg() << cq
-  if 'use_qmeasure':
+  if use_qnn_measure:
     prob = ProbsMeasure(list(range(mbit)), prog, qvm, qv)
   else:
     prob = qvm.prob_run_list(prog, qv[:mbit])
@@ -144,9 +180,9 @@ def get_YouroQNet(args) -> QModelInit:
 
     # circuit
     n_repeat  = args.n_repeat
-    SEC_rots  = [RY, RZ]    # can tune this
-    SEC_entgl = CNOT        # NOTE: fixed for the moment
-    CMC_rots  = [RY, RZ]    # can tune this
+    SEC_rots  = names_to_gates(args.SEC_rots)
+    SEC_entgl = names_to_gates(args.SEC_entgl)[0]
+    CMC_rots  = names_to_gates(args.CMC_rots)
     if 'render circuit templates':
       StrongEntangleCircuit = lambda *args, **kwargs: StrongEntangleCircuitTemplate(*args, **kwargs, rots=SEC_rots, entgl=SEC_entgl)
       ControlMultiCircuit   = lambda *args, **kwargs: ControlMultiCircuitTemplate  (*args, **kwargs, rots=CMC_rots)
@@ -179,9 +215,9 @@ def get_YouroQNet(args) -> QModelInit:
 
   def YouroQNet_qdrl(data:NDArray, param:NDArray, qv:Qubits, cv:Cbits, qvm:QVM):
     def embed_lookup(embed:NDArray, data:NDArray) -> NDArray:
-      ids = data.astype(np.int32)       # [L], one sample
-      theta = embed[ids]                # [mL, D], sentence related embeddings
-      theta_n = embed_norm(theta)       # NOTE: assure angle range in [-pi, pi]
+      ids = data.astype(np.int32)         # [L], one sample
+      theta = embed[ids]                  # [mL, D], sentence related embeddings
+      theta_n = embed_norm(args, theta)   # NOTE: assure angle range in [-pi, pi]
       return theta_n
 
     def build_buf_load(theta:NDArray) -> QCircuit:
@@ -249,24 +285,79 @@ def get_YouroQNet(args) -> QModelInit:
 
 def get_model_and_criterion(args) -> Tuple[QModel, Callable]:
   loss_cls, compute_circuit, n_qubit, n_param = globals()[f'get_{args.model}QNet'](args)
-  criterion = loss_cls()
   model = QuantumLayer(compute_circuit, n_param, 'cpu', n_qubit, 0, GRAD_METH[args.grad_meth], args.grad_dx)
-  model.m_para.fill_rand_normal_(m=0, s=0.2)
-  # NOTE: uniform inits do not work in most cases
-  #model.m_para.fill_rand_uniform_(v=1)
-  #model.m_para.fill_rand_signed_uniform_(v=1)
-  #model.m_para.fill_rand_uniform_with_bound_(-np.pi/2, np.pi/2)
-  return model, criterion
+  model.m_para.fill_rand_normal_(m=0, s=args.embed_var)
+  if not 'use uniform inits, they do not work in most cases :(':
+    model.m_para.fill_rand_uniform_(v=1)
+    model.m_para.fill_rand_signed_uniform_(v=1)
+    model.m_para.fill_rand_uniform_with_bound_(-np.pi/2, np.pi/2)
+  return model, loss_cls()
 
-def get_embedding(args, param) -> NDArray:
+def get_vocab(args) -> Vocab:
+  analyzer: str = args.analyzer
+  analyzers = []
+  if analyzer.endswith('+'):
+    analyzers.append('char')
+    analyzer = analyzer[:-1]
+  analyzers.append(analyzer)
+
+  vocab = {}
+  for analyzer in analyzers:
+    vocab.update(load_vocab(LOG_PATH / analyzer / 'vocab.txt'))
+  if args.min_freq > 0:
+    vocab = truncate_vocab(vocab, args.min_freq)
+  return vocab
+
+def get_word2id(args, symbols:List[str]) -> VocabI:
+  if args.pad is not None: syms = [args.pad] + symbols
+  syms.sort()
+  word2id = { v: i for i, v in enumerate(syms) }
+  return word2id
+
+def get_preprocessor_pack(args, vocab:Vocab) -> PreprocessPack:
+  tokenizer = list if args.analyzer == 'char' else make_tokenizer(vocab) 
+  aligner = lambda x: align_words(x, args.length, args.pad)
+  word2id = get_word2id(args, list(vocab.keys()))
+  PAD_ID = word2id.get(args.pad, -1)
+  return tokenizer, aligner, word2id, PAD_ID
+
+def gen_dataloader(args, dataset:Dataset, vocab:Vocab, shuffle:bool=False) -> Dataloader:
+  preproc_pack = get_preprocessor_pack(args, vocab)
+
+  def iter_by_batch() -> Tuple[NDArray, NDArray]:
+    nonlocal args, dataset, preproc_pack, shuffle
+
+    T, Y = dataset
+    N = len(Y)
+    indexes = list(range(N))
+    if shuffle: random.shuffle(indexes) 
+
+    for i in range(0, N, args.batch_size):
+      T_batch, Y_batch = [], []
+      for j in range(args.batch_size):
+        if i + j >= N: break
+        idx = indexes[i + j]
+        T_batch.append(sent_to_ids (T[idx], preproc_pack))
+        Y_batch.append(id_to_onehot(Y[idx], args.n_class))
+
+      if len(T_batch) == args.batch_size:
+        yield [np.stack(e, axis=0).astype(np.int32) for e in [T_batch, Y_batch]]
+  
+  return iter_by_batch    # return a DataLoader generator
+
+def get_embedding(args, param:NDArray) -> NDArray:
+  ''' split out the theta part from the param := (theta, psi) bundle '''
   assert hasattr(args, 'n_param_t'), f'args.n_param_t not found, forgot to load from {TASK_FILE} ??'
   phi = param[:args.n_param_t]
   return phi.reshape(args.n_vocab, -1)   # [K, D=n_repeat*n_gate_param]
 
-def embed_norm(x:NDArray) -> NDArray:
+def embed_norm(args, x:NDArray) -> NDArray:
   ''' value norm raw embeddings, assure rotation angle ranged in [-pi, pi] '''
-  #return np.arctan(x)      # NOTE: [-pi/2, pi/2] seems not work in most cases
-  return 2 * np.arctan(x)
+  if args.embed_norm == 'arctan':
+    return np.arctan(x)             # [-pi/2, pi/2], NOTE: seems not work in most cases
+  if args.embed_norm == '2*arctan':
+    return 2 * np.arctan(x)         # [-pi, pi]
+  raise ValueError(f'unknown embed_norm: {embed_norm}')
 
 
 def test(args, model:QModel, criterion, test_loader:Dataloader, logger:Logger) -> Metrics:
@@ -476,7 +567,7 @@ def go_inspect(args, name_suffix:str='', words:List[str]=None):
   print('embed.shape:', embed.shape)
 
   # plot
-  embed_n  = embed_norm(embed)
+  embed_n  = embed_norm(args, embed)
   embed_np = np.abs(embed_n)
   vmax = np.max([e.max() for e in [embed, embed_n, embed_np]])
   vmin = np.min([e.min() for e in [embed, embed_n, embed_np]])
@@ -495,24 +586,34 @@ def get_args():
   MODELS = [name[len('get_'):-len('QNet')] for name in globals() if name.startswith('get_') and name.endswith('QNet')]
 
   parser = ArgumentParser()
-  parser.add_argument('-L', '--analyzer',   default='kgram+', choices=ANALYZERS, help='tokenize level')
-  parser.add_argument('-M', '--model',      default='Youro',  choices=MODELS,    help='model config string pattern')
-  parser.add_argument('-O', '--optim',      default='SGD',    choices=['SGD', 'Adam'],  help='optimizer')
-  parser.add_argument('-G', '--grad_meth',  default='fd',     choices=GRAD_METH.keys(), help='grad method')
-  parser.add_argument(      '--grad_dx',    default=0.01,     type=float, help='step size for finite_diff')
-  parser.add_argument('-P', '--pad',        default='\x00',        help='model input pad')
-  parser.add_argument('-N', '--length',     default=3,   type=int, help='model input length (in tokens)')
-  parser.add_argument('-D', '--n_repeat',   default=2,   type=int, help='circuit n_repeat, effecting embed depth')
+  # preprocess
+  parser.add_argument('-L', '--analyzer', default='kgram+', choices=ANALYZERS, help='tokenize level')
+  parser.add_argument('-P', '--pad',      default='\x00',      help='model input pad')
+  parser.add_argument('--min_freq',       default=5, type=int, help='min_freq for final embedding vocab')
+  # model
+  parser.add_argument('-M', '--model', default='Youro',   choices=MODELS, help='model config string pattern')
+  parser.add_argument('--n_len',       default=3,         type=int,       help='model input length (in tokens), aka. n_qubit_q')
+  parser.add_argument('--n_class',     default=N_CLASS,   type=int,       help='num of class, aka. n_qubit_p')
+  parser.add_argument('--n_repeat',    default=2,         type=int,       help='circuit n_repeat, effecting embed depth')
+  parser.add_argument('--embed_var',   default=0.2,       type=float,     help='embedding params init variance (normal)')
+  parser.add_argument('--embed_norm',  default='arctan',  choices=['arctan', '2*arctan'], help='embedding out normalize)')
+  parser.add_argument('--SEC_rots',    default='RY',      help=f'choose multi from {VALID_SEC_ROTS}, comma seperate')
+  parser.add_argument('--SEC_entgl',   default='CZ',      help=f'choose one from {VALID_SEC_ENTGL}')
+  parser.add_argument('--CMC_rots',    default='RY,RZ',   help=f'choose multi from {VALID_CMC_ROTS}, comma seperate')
+  # train
+  parser.add_argument('-O', '--optim',      default='SGD', choices=['SGD', 'Adam'],  help='optimizer')
+  parser.add_argument('-G', '--grad_meth',  default='fd',  choices=GRAD_METH.keys(), help='grad method')
+  parser.add_argument(      '--grad_dx',    default=0.01,  type=float, help='step size for finite_diff')
   parser.add_argument('-E', '--epochs',     default=10,  type=int)
   parser.add_argument('-B', '--batch_size', default=4,   type=int)
   parser.add_argument('--lr',               default=0.1, type=float)
-  parser.add_argument('--min_freq',         default=5,   type=int, help='min_freq for final embedding vocab')
-  parser.add_argument('--n_vote',           default=5,   type=int, help='max number of voters at inference time')
-  parser.add_argument('--n_class',    default=N_CLASS,   type=int, help='num of class')
-  parser.add_argument('--seed',     default=RAND_SEED,   type=int, help='rand seed')
   parser.add_argument('--slog_interval',    default=10,  type=int, help='log loss/acc')
   parser.add_argument('--log_interval',     default=50,  type=int, help='log & reset loss/acc')
   parser.add_argument('--test_interval',    default=200, type=int, help='test on valid split')
+  # infer
+  parser.add_argument('--n_vote', default=5, type=int, help='max number of voters at inference time')
+  # misc
+  parser.add_argument('--seed', default=RAND_SEED, type=int, help='rand seed')
   args = parser.parse_args()
   
   try_fix_randseed(args.seed)

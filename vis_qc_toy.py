@@ -33,8 +33,6 @@ pdf = None
 n_gate = 5
 
 
-init_params = None
-
 def make_qdrl_circuit(n_repeat, input, params, qv, cv, qvm):
   '''
     RZ can be replaced by RX
@@ -42,15 +40,8 @@ def make_qdrl_circuit(n_repeat, input, params, qv, cv, qvm):
     CP can be replaced by CR, control order can be swapped
   '''
 
-  global init_params
-
-  if init_params is None:   # try customize init_weight, but failed :(
-    n_params = np.cumprod(params.shape).item()
-    init_params = np.linspace(0, np.pi, n_params).reshape(params.shape)
-    for i in range(n_params):
-      params[i] = init_params[i]
-  else:
-    params += np.random.uniform(size=params.shape) * 1e-5
+  # add some noise to stablize
+  params += np.random.uniform(size=params.shape) * 1e-5
 
   prog = QProg() << H(qv)
   i = 0
@@ -81,6 +72,12 @@ def train(args):
   # model & optim
   qdrl_circuit = partial(make_qdrl_circuit, args.n_repeat)
   model = QuantumLayer(qdrl_circuit, args.param_num, 'cpu', args.qubit_num, 0, GRAD_METH[args.grad_meth], args.grad_dx)
+  if 'custom init':
+    params = model.m_para
+    n_params = np.cumprod(params.shape).item()
+    init_params = np.linspace(0, np.pi, n_params).reshape(params.shape)
+    for i in range(n_params):
+      params[i] = init_params[i]
   print('param_cnt:', sum([p.size for p in model.parameters()]))
   criterion = MeanSquaredError()
   
