@@ -585,13 +585,14 @@ def go_inspect(args, name_suffix:str='', words:List[str]=None):
   # plot
   embed_n  = embed_norm(args, embed)
   embed_np = np.abs(embed_n)
-  vn = args.embed_norm * np.pi
+  k = args.embed_norm
+  vn = k * np.pi
   plt.clf()
   plt.subplot(131) ; plt.imshow(embed,    cmap='bwr', vmax=vn, vmin=-vn) ; plt.colorbar() ; plt.title('embed')
   if words: plt.yticks(range(len(words)), words)
-  plt.subplot(132) ; plt.imshow(embed_n,  cmap='bwr', vmax=vn, vmin=-vn) ; plt.colorbar() ; plt.title('2*arctan(embed)')
+  plt.subplot(132) ; plt.imshow(embed_n,  cmap='bwr', vmax=vn, vmin=-vn) ; plt.colorbar() ; plt.title(f'{k*2}*arctan(embed)')
   if words: plt.yticks(range(len(words)), words)
-  plt.subplot(133) ; plt.imshow(embed_np, cmap='bwr', vmax=vn, vmin=-vn) ; plt.colorbar() ; plt.title('|2*arctan(embed)|')
+  plt.subplot(133) ; plt.imshow(embed_np, cmap='bwr', vmax=vn, vmin=-vn) ; plt.colorbar() ; plt.title(f'|{k*2}*arctan(embed)|')
   if words: plt.yticks(range(len(words)), words)
   plt.suptitle(f'embed: n_vocab={K} n_dim={D}')
   savefig(out_dp / 'embed.png')
