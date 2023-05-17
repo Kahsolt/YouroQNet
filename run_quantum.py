@@ -436,7 +436,6 @@ def train(args, model:QModel, optimizer, criterion, train_loader:Dataloader, tes
         logger.info(f'>> [Step {step}] loss: {losses[-1]}, acc: {accs[-1]:.3%}')
         tot, ok, loss = 0, 0, 0.0
 
-      if step % args.test_interval == 0:
         model.eval()
         tloss, tacc, tf1 = test(args, model, criterion, test_loader, logger)
         test_losses.append(tloss)
@@ -624,8 +623,7 @@ def get_args():
   parser.add_argument('-E', '--epochs',     default=1,      type=int)
   parser.add_argument('-B', '--batch_size', default=4,      type=int)
   parser.add_argument('--slog_interval',    default=10,     type=int, help='log loss/acc')
-  parser.add_argument('--log_interval',     default=50,     type=int, help='log & reset loss/acc')
-  parser.add_argument('--test_interval',    default=200,    type=int, help='test on valid split')
+  parser.add_argument('--log_interval',     default=50,     type=int, help='log & test & reset loss/acc')
   # infer
   parser.add_argument('--n_vote', default=5, type=int, help='max number of voters at inference time')
   # misc

@@ -296,7 +296,6 @@ def train(args, model:Module, optimizer, criterion, train_loader:Dataloader, tes
         logger.info(f'>> [Step {step}] loss: {losses[-1]}, acc: {accs[-1]:.3%}')
         tot, ok, loss = 0, 0, 0.0
 
-      if step % args.test_interval == 0:
         model.eval()
         tloss, tacc = valid(args, model, criterion, test_loader, logger)
         test_losses.append(tloss)
@@ -374,8 +373,7 @@ def get_args():
   parser.add_argument('--min_freq',         default=5,    type=int, help='final vocab for embedding')
   parser.add_argument('--n_class',    default=N_CLASS,    type=int, help='num of class')
   parser.add_argument('--seed',     default=RAND_SEED,    type=int, help='rand seed')
-  parser.add_argument('--log_interval',     default=50,   type=int, help='log & reset loss/acc')
-  parser.add_argument('--test_interval',    default=200,  type=int, help='test on valid split')
+  parser.add_argument('--log_interval',     default=50,   type=int, help='log & test & reset loss/acc')
   args = parser.parse_args()
 
   try_fix_randseed(args.seed)

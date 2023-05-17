@@ -182,7 +182,6 @@ def train(args, model:Module, optimizer, criterion, train_loader:Dataloader, tes
         logger.info(f'>> [Step {step}] loss: {losses[-1]}, acc: {accs[-1]:.3%}')
         tot, ok, loss = 0, 0, 0.0
 
-      if step % args.test_interval == 0:
         model.eval()
         tloss, tacc = valid(args, model, criterion, test_loader, logger)
         test_losses.append(tloss)

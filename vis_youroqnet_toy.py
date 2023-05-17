@@ -139,6 +139,5 @@ if __name__ == '__main__':
   args.n_vote        = 1
   args.slog_interval = 10
   args.log_interval  = 50
-  args.test_interval = 50
 
   go_all(args)
