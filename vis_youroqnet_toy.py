@@ -70,7 +70,7 @@ def go_all(args):
   global vocab
 
   # preprocess: see run_quantum.gen_dataloader()
-  tokenizer, aligner, word2id, PAD_ID = get_preprocessor_pack(args, vocab)
+  tokenizer, aligner, word2id, _, PAD_ID = get_preprocessor_pack(args, vocab)
   id2word = {v: k for k, v in word2id.items()}
 
   def preprocess(data):

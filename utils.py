@@ -220,8 +220,12 @@ def align_words(words:List[str], n_limit:int, pad:str='') -> List[str]:
   return words[cp : cp + n_limit]
 
 def sent_to_ids(sent:str, packed:'PreprocessPack') -> NDArray:
-  tokenizer, aligner, word2id, PAD_ID = packed
+  tokenizer, aligner, word2id, _, PAD_ID = packed
   return np.asarray([word2id.get(w, PAD_ID) for w in aligner(tokenizer(sent))])
+
+def ids_to_sent(ids:List[int], packed:'PreprocessPack') -> str:
+  _, _, _, id2word, PAD_ID = packed
+  return ''.join(id2word.get(id) if id != PAD_ID else '' for id in ids)
 
 def id_to_onehot(label:int, n_class:int=None) -> NDArray:
   return np.eye(n_class)[label]

@@ -300,18 +300,19 @@ def get_vocab(args) -> Vocab:
     vocab = truncate_vocab(vocab, args.min_freq)
   return vocab
 
-def get_word2id(args, symbols:List[str]) -> VocabI:
+def get_word_mappings(args, symbols:List[str]) -> Tuple[VocabI, VocabI]:
   if args.pad is not None: syms = [args.pad] + symbols
   syms.sort()
   word2id = { v: i for i, v in enumerate(syms) }
-  return word2id
+  id2word = { i: v for i, v in enumerate(syms) }
+  return word2id, id2word
 
 def get_preprocessor_pack(args, vocab:Vocab) -> PreprocessPack:
   tokenizer = list if args.analyzer == 'char' else make_tokenizer(vocab)
   aligner = lambda x: align_words(x, args.n_len, args.pad)
-  word2id = get_word2id(args, list(vocab.keys()))
+  word2id, id2word = get_word_mappings(args, list(vocab.keys()))
   PAD_ID = word2id.get(args.pad, -1)
-  return tokenizer, aligner, word2id, PAD_ID
+  return tokenizer, aligner, word2id, id2word, PAD_ID
 
 def gen_dataloader(args, dataset:Dataset, vocab:Vocab, shuffle:bool=False) -> Dataloader:
   preproc_pack = get_preprocessor_pack(args, vocab)
@@ -328,13 +329,19 @@ def gen_dataloader(args, dataset:Dataset, vocab:Vocab, shuffle:bool=False) -> Da
       T_batch, Y_batch = [], []
       for j in range(args.batch_size):
         if i + j >= N: break
+
         idx = indexes[i + j]
         lbl = np.int32(Y[idx] == args.binary) if args.binary > 0 else Y[idx]
-        print('txt:', T[idx])
-        print('ids:', sent_to_ids (T[idx], preproc_pack))
-        print('lbl:', lbl)
-        T_batch.append(sent_to_ids (T[idx], preproc_pack))
-        Y_batch.append(id_to_onehot(lbl,    args.n_class))
+        ids = sent_to_ids (T[idx], preproc_pack)
+        tgt = id_to_onehot(lbl, args.n_class)
+        
+        if args.debug_step:
+          print('txt:', ids_to_sent(ids, preproc_pack))
+          print('ids:', ids)
+          print('lbl:', lbl)
+
+        T_batch.append(ids)
+        Y_batch.append(tgt)
 
       if len(T_batch) == args.batch_size:
         yield [np.stack(e, axis=0).astype(np.int32) for e in [T_batch, Y_batch]]
@@ -557,7 +564,7 @@ def go_infer(args, texts:List[str]=None, name_suffix:str='') -> Union[Votes, Inf
 
   # preprocessor
   tokenizer = list if args.analyzer == 'char' else make_tokenizer(vocab)
-  word2id = get_word2id(args, list(vocab.keys()))
+  word2id, _ = get_word_mappings(args, list(vocab.keys()))
 
   # make a inferer callable if no text given
   if texts is None:

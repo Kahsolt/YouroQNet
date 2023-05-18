@@ -18,6 +18,7 @@ from utils import LOG_PATH, load_dataset, timer, is_zh_word
 Vocab  = Dict[str, int]     # { word: freq }
 VocabP = Dict[str, float]   # { word: prob }
 VocabI = Dict[str, int]     # { word: index }
+VocabW = Dict[str, int]     # { index: word }
 
 def load_vocab(fp:str) -> Vocab:
   print(f'>> load vocab from {fp}')
@@ -98,7 +99,7 @@ TokenizedS = List[str]
 TokenizedP = List[Tuple[float, List[str]]]
 Tokenized = Union[TokenizedS, TokenizedP]
 Tokenizer = Callable[[str, Optional[int], Optional[int]], Tokenized]
-PreprocessPack = Tuple[Tokenizer, Vocab, VocabI, int]   # PAD_ID:int
+PreprocessPack = Tuple[Tokenizer, Vocab, VocabI, VocabW, int]   # PAD_ID:int
 
 def _mk_trie(vocab:VocabP) -> Trie:
   ''' build a trie tree '''
