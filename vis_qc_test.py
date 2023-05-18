@@ -8,16 +8,16 @@ from functools import partial
 import numpy as np
 import matplotlib.pyplot as plt
 
-from pyqpanda import QProg
+from pyqpanda import CPUQVM, QProg
 from pyqpanda import H, X, Y, Z, CNOT, SWAP, RX, RY, RZ, CR, CP
 from pyvqnet.tensor import QTensor
-from pyvqnet.qnn import QuantumLayer, ProbsMeasure
+from pyvqnet.qnn import QuantumLayer, ProbsMeasure, QuantumLayerMultiProcess
 from pyvqnet.optim import Adam, SGD
 from pyvqnet.nn import MeanSquaredError
 
-from utils import TMP_PATH, GRAD_METH, savefig
+from utils import TMP_PATH, GRAD_METH, savefig, timer
 
-# NOTE: a toy qdrl_circuit approximating arbitary normalized prob-dist, showing capability of QNNs
+# NOTE: a test qdrl_circuit approximating arbitary normalized prob-dist, showing capability of QNNs
 
 # make a triple-face coin: equal prob of [00, 01, 10]
 #pdf = [0, 1/3, 1/3, 1/3]
@@ -41,7 +41,7 @@ def make_qdrl_circuit(n_repeat, input, params, qv, cv, qvm):
   '''
 
   # add some noise to stablize
-  params += np.random.uniform(size=params.shape) * 1e-5
+  params += np.random.uniform(size=params.shape) * 1e-3
 
   prog = QProg() << H(qv)
   i = 0
@@ -57,7 +57,18 @@ def make_qdrl_circuit(n_repeat, input, params, qv, cv, qvm):
   return ProbsMeasure(list(range(len(qv))), prog, qvm, qv)
 
 
-def train(args):
+def make_qdrl_circuit_mp(n_repeat, input, params, nq, nc):
+  global qvm, qv
+  if qvm is None:
+    qvm = CPUQVM()
+    qvm.init_qvm()
+    qv = qvm.qAlloc_many(nq)
+
+  return make_qdrl_circuit(n_repeat, input, params, qv, None, qvm)
+
+
+@timer
+def train(args, model=None):
   # mock data
   global pdf
   if pdf is None:
@@ -70,8 +81,14 @@ def train(args):
   Y = QTensor(pdf).reshape((1, -1))
 
   # model & optim
-  qdrl_circuit = partial(make_qdrl_circuit, args.n_repeat)
-  model = QuantumLayer(qdrl_circuit, args.param_num, 'cpu', args.qubit_num, 0, GRAD_METH[args.grad_meth], args.grad_dx)
+  args.param_num = args.n_repeat * n_gate
+  if args.mp:
+    qdrl_circuit = partial(make_qdrl_circuit_mp, args.n_repeat)
+    model = QuantumLayerMultiProcess(qdrl_circuit, args.param_num, 'cpu', args.qubit_num, 0, GRAD_METH[args.grad_meth], args.grad_dx)
+  else:
+    qdrl_circuit = partial(make_qdrl_circuit, args.n_repeat)
+    model = QuantumLayer(qdrl_circuit, args.param_num, 'cpu', args.qubit_num, 0, GRAD_METH[args.grad_meth], args.grad_dx)
+
   if not 'custom init':
     params = model.m_para
     n_params = np.cumprod(params.shape).item()
@@ -105,8 +122,10 @@ def train(args):
     if i % 100 == 0:
       l = loss.item()
       print(f"step: {i}, loss: {l:g}")
-      if l < 1e-8: break
+      if l < 1e-12: break
   
+  return
+
   # result
   print('-' * 72)
   print('params:', model.m_para)
@@ -121,7 +140,7 @@ def train(args):
   plt.subplot(212)
   plt.plot(np.log(loss_shot))
   plt.suptitle('loss & log(loss)')
-  savefig(TMP_PATH / 'run_quantum_toy_loss.png')
+  savefig(TMP_PATH / 'run_quantum_test_loss.png')
 
   param_shot = np.stack(param_shot, axis=0)
   plt.clf()
@@ -129,7 +148,7 @@ def train(args):
     plt.plot(param_shot[:, i], label=i)
   plt.suptitle('params')
   plt.legend()
-  savefig(TMP_PATH / 'run_quantum_toy_params.png')
+  savefig(TMP_PATH / 'run_quantum_test_params.png')
   plt.show()
 
 
@@ -143,8 +162,13 @@ if __name__ == '__main__':
   parser.add_argument('-G', '--grad_meth', default='ps', choices=GRAD_METH.keys())
   parser.add_argument('-D', '--grad_dx',   default=0.01, type=float)
   parser.add_argument(      '--lr',        default=0.1,  type=float)
+  parser.add_argument('--mp', action='store_true',  help='run the multi-process version')
   args = parser.parse_args()
 
-  args.param_num = args.n_repeat * n_gate
+  # the multi-process version with QuantumLayerMultiProcess works 🤔
+  # => however, it does NOT seem to speed up even a little bit...
+  if args.mp:
+    qvm = None
+    qv  = None
 
   train(args)

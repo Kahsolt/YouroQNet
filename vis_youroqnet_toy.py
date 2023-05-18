@@ -100,7 +100,7 @@ def go_all(args):
   # train
   trainset = [e[1] for e in train_data], [e[0] for e in train_data]
   testset  = [e[1] for e in test_data],  [e[0] for e in test_data]
-  go_train(args, (vocab, trainset, testset), name_suffix=SUFFIX)
+  go_train(args, user_vocab_data=(vocab, trainset, testset), name_suffix=SUFFIX)
   plt.show()
 
   # inspect
