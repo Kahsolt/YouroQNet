@@ -320,17 +320,21 @@ def gen_dataloader(args, dataset:Dataset, vocab:Vocab, shuffle:bool=False) -> Da
     nonlocal args, dataset, preproc_pack, shuffle
 
     T, Y = dataset
-    N = len(Y)
+    N = args.limit if args.limit > 0 else len(Y)
     indexes = list(range(N))
-    if shuffle: random.shuffle(indexes) 
+    if shuffle: random.shuffle(indexes)
 
     for i in range(0, N, args.batch_size):
       T_batch, Y_batch = [], []
       for j in range(args.batch_size):
         if i + j >= N: break
         idx = indexes[i + j]
+        lbl = np.int32(Y[idx] == args.binary) if args.binary > 0 else Y[idx]
+        print('txt:', T[idx])
+        print('ids:', sent_to_ids (T[idx], preproc_pack))
+        print('lbl:', lbl)
         T_batch.append(sent_to_ids (T[idx], preproc_pack))
-        Y_batch.append(id_to_onehot(Y[idx], args.n_class))
+        Y_batch.append(id_to_onehot(lbl,    args.n_class))
 
       if len(T_batch) == args.batch_size:
         yield [np.stack(e, axis=0).astype(np.int32) for e in [T_batch, Y_batch]]
@@ -362,7 +366,7 @@ def embed_norm(args, x:NDArray) -> NDArray:
 def prob_joint_to_marginal(x:QTensor) -> QTensor:
   ''' probability distribution projection '''
   B, D = x.shape
-  NC = int(np.sqrt(D))
+  NC = int(np.log2(D))
 
   # for binary-clf, return as is
   if NC == 1: return x
@@ -641,6 +645,8 @@ def get_args():
   # misc
   parser.add_argument('--seed', default=RAND_SEED, type=int, help='rand seed')
   parser.add_argument('--debug_step', action='store_true', help='debug output of each training step')
+  parser.add_argument('--binary', default=-1, type=int, help='force binary clf, set the target class-1 label')
+  parser.add_argument('--limit',  default=-1, type=int, help='limit train data')
   args = parser.parse_args()
   
   try_fix_randseed(args.seed)
@@ -649,6 +655,10 @@ def get_args():
 
 if __name__ == '__main__':
   args = get_args()
+
+  if args.binary > 0:
+    print('>> force binary clf, override n_class = 2')
+    args.n_class = 2
 
   go_train(args)
   go_inspect(args)
