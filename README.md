@@ -29,7 +29,7 @@ And, code repo for the qualifying stage is here: [第二届“司南杯”初赛
 
 - `python vis_tokenizer.py` for adaptive k-gram tokeinzer interactive demo
 - `python vis_youroqnet.py` for YouroQNet interactive demo
-  - `python vis_youroqnet_toy.py` (👈 run the toy version out of box before all)
+  - `run_quantum_toy.cmd` (👈 run the toy version out of box before all)
 
 ⚪ for full development
 

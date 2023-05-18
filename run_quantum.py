@@ -174,7 +174,7 @@ def get_YouroQNet(args) -> QModelInit:
   if 'hparam':
     # qubits: |p> for context, |q> for data buffer
     #n_qubit_p = int(np.ceil(np.log2(args.n_class)))     # FIXME: need at leaset `n_class - 1`` qubits
-    n_qubit_p = args.n_class
+    n_qubit_p = args.n_class if args.n_class > 2 else 1
     n_qubit_q = args.n_len
     n_qubit   = n_qubit_p + n_qubit_q
 
@@ -267,7 +267,7 @@ def get_YouroQNet(args) -> QModelInit:
     ctx: Qubits = qv[:n_qubit_p][::-1]  # |p>, current context
     buf: Qubits = qv[n_qubit_p:]        # |q>, placeholder for input sequence
     # split param
-    embed = get_embedding(args, param)        # whole embed table, [K, D=n_repeat*n_gate_param]
+    embed = get_embed(args, param)        # whole embed table, [K, D=n_repeat*n_gate_param]
     theta = embed_lookup(args, embed, data)   # sentence related entries, [mL, D]
     psi   = param[n_param_tht:]               # ansatz params
     return compute_circuit(build_circuit(theta, psi), qv, qvm, n_qubit_p)
@@ -337,11 +337,17 @@ def gen_dataloader(args, dataset:Dataset, vocab:Vocab, shuffle:bool=False) -> Da
   
   return iter_by_batch    # return a DataLoader generator
 
-def get_embedding(args, param:NDArray) -> NDArray:
+def get_ansatz(args, param:NDArray) -> NDArray:
+  ''' split out the psi part from the param := (theta, psi) bundle '''
+  assert hasattr(args, 'n_param_tht'), f'args.n_param_tht not found, forgot to load from {TASK_FILE} ??'
+  psi = param[args.n_param_tht:]
+  return psi
+
+def get_embed(args, param:NDArray) -> NDArray:
   ''' split out the theta part from the param := (theta, psi) bundle '''
   assert hasattr(args, 'n_param_tht'), f'args.n_param_tht not found, forgot to load from {TASK_FILE} ??'
-  phi = param[:args.n_param_tht]
-  return phi.reshape(args.n_vocab, -1)   # [K, D=n_repeat*n_gate_param]
+  tht = param[:args.n_param_tht]
+  return tht.reshape(args.n_vocab, -1)   # [K, D=n_repeat*n_gate_param]
 
 def embed_lookup(args, embed:NDArray, ids:NDArray) -> NDArray:
   ids = ids.astype(np.int32)      # [L], one sample
@@ -362,7 +368,8 @@ def prob_joint_to_marginal(x:QTensor) -> QTensor:
   else:
     # for multi-clf, accumulate joint-distro to marginal-distro [B, D=16=2^4] => [B, D=4=NC]
     NC = int(np.sqrt(D))
-    return tensor.stack([x[:, 2**k] for k in range(NC)], axis=1)
+    #return tensor.stack([x[:, 2**k] for k in range(NC)], axis=1)
+    return x[:, :NC]
 
 
 def test(args, model:QModel, criterion, test_loader:Dataloader, logger:Logger) -> Metrics:
@@ -415,7 +422,7 @@ def train(args, model:QModel, optimizer, criterion, train_loader:Dataloader, tes
 
       pred = argmax(probs)
 
-      if 'debug':
+      if not 'debug':
         print('probs:', probs)
         print('Y:', Y)
         print('true:', Y_np.argmax(-1))
@@ -503,7 +510,8 @@ def go_train(args, user_vocab_data:Tuple[Vocab, Dataset, Dataset]=None, name_suf
 
   # train
   losses_and_accs = train(args, model, optimizer, criterion, train_loader, test_loader, logger)
-  
+  params = model.m_para.to_numpy()
+
   # plot
   plot_loss_and_acc(losses_and_accs, out_dp / PLOT_FILE, title=args.expname)
   
@@ -512,7 +520,12 @@ def go_train(args, user_vocab_data:Tuple[Vocab, Dataset, Dataset]=None, name_suf
   load_ckpt(model, out_dp / MODEL_FILE)
   
   # eval
-  result = { 'hparam': vars(args), 'scores': {} }
+  result = { 
+    'hparam': vars(args), 
+    'ansatz': get_ansatz(args, params).tolist(),
+    'embed': get_embed(args, params).tolist(),
+    'scores': {},
+  }
   for split in SPLITS:
     datat_loader = locals().get(f'{split}_loader')
     if datat_loader is None: continue     # ignore if valid_loader not exists
@@ -577,7 +590,7 @@ def go_inspect(args, name_suffix:str='', words:List[str]=None):
   ckpt = load_parameters(out_dp / MODEL_FILE)
   param = ckpt['m_para'].to_numpy()
   print('param.shape:', param.shape)
-  embed = get_embedding(args, param)
+  embed = get_embed(args, param)
   K, D = embed.shape
   print('embed.shape:', embed.shape)
 
@@ -612,9 +625,9 @@ def get_args():
   parser.add_argument('--n_repeat',    default=1,         type=int,       help='circuit n_repeat, effecting embed depth')
   parser.add_argument('--embed_var',   default=0.2,       type=float,     help='embedding params init variance (normal)')
   parser.add_argument('--embed_norm',  default=1,         type=float,     help='embedding out value normalize, fatcor of pi (1 means [-pi, pi]); set 0 to disable')
-  parser.add_argument('--SEC_rots',    default='RY,RZ',   help=f'choose multi from {VALID_SEC_ROTS}, comma seperate')
-  parser.add_argument('--SEC_entgl',   default='CNOT',    help=f'choose one from {VALID_SEC_ENTGL}')
-  parser.add_argument('--CMC_rots',    default='RY,RZ',   help=f'choose multi from {VALID_CMC_ROTS}, comma seperate')
+  parser.add_argument('--SEC_rots',    default='RY,RZ',   help=f'choose multi from {gates_to_names(VALID_SEC_ROTS)}, comma seperate')
+  parser.add_argument('--SEC_entgl',   default='CNOT',    help=f'choose one from {gates_to_names(VALID_SEC_ENTGL)}')
+  parser.add_argument('--CMC_rots',    default='RY,RZ',   help=f'choose multi from {gates_to_names(VALID_CMC_ROTS)}, comma seperate')
   # train
   parser.add_argument('-O', '--optim',      default='Adam', choices=['SGD', 'Adam'],  help='optimizer')
   parser.add_argument('-G', '--grad_meth',  default='fd',   choices=GRAD_METH.keys(), help='grad method')

@@ -14,18 +14,18 @@ from pyqpanda import H, X, Y, Z, CNOT, SWAP, RX, RY, RZ, CR, CP
 from pyvqnet.qnn import ProbsMeasure
 from pyqpanda import deep_copy
 
-from utils import TMP_PATH, timer, savefig, NDArray, Qubits
+from utils import TMP_PATH, LOG_PATH, timer, savefig, NDArray, Qubits
 
 # vqc in a fucntional view
 
 
-def qc_simple(qv:Qubits, param:NDArray) -> QCircuit:
+def qc_simple(qv:Qubits, param:NDArray, *args) -> QCircuit:
   qc = QCircuit() \
     << RX(qv[0], param[0]) \
     << RX(qv[0], pi/3)
   return qc
 
-def qc_complex(qv:Qubits, param:NDArray) -> QCircuit:
+def qc_complex(qv:Qubits, param:NDArray, *args) -> QCircuit:
   qc = QCircuit()
   qc << RX(qv[0], param[0])
   qc << RZ(qv[0], pi/2)
@@ -43,7 +43,7 @@ def qc_complex(qv:Qubits, param:NDArray) -> QCircuit:
   qc << deep_copy(qc)
   return qc
 
-def qc_test(qv:Qubits, param:NDArray) -> QCircuit:
+def qc_test(qv:Qubits, param:NDArray, *args) -> QCircuit:
   qc = QCircuit() \
     << RX(qv[0], param[0]) \
     << RY(qv[1], param[1]) \
@@ -51,13 +51,11 @@ def qc_test(qv:Qubits, param:NDArray) -> QCircuit:
     << RX(qv[1], param[2])
   return qc
 
-def qc_toy(qv:Qubits, param:NDArray) -> QCircuit:
+def qc_toy(qv:Qubits, param:NDArray, *args) -> QCircuit:
   ''' the concrete 4qubit-1repeat [RY]-CNOT-[RY] toy YouroQNet '''
 
   tht = param
-  #psi = np.linspace(pi/4, pi/2, 8)
-  np.random.seed(114514)
-  psi = np.random.normal(size=[8])
+  psi = args[0]
 
   qc = QCircuit()
   qc << RY(qv[0], psi[0])
@@ -121,10 +119,23 @@ if 'grid queryer':
 
 
 def plot_qc_func(args):
+  if args.name == 'toy':
+    try:
+      import json
+      fp = LOG_PATH / 'user' / 'Youro_toy' / 'task.json'
+      with open(fp) as fh:
+        psi = json.load(fh)['ansatz']
+      print(f'>> load psi param from {fp}')
+    except:
+      print(f'>> load psi param from pre-defined consts')
+      psi = [ -1.2153749, -1.1459408, -0.0058295, -0.0066799, -0.0049780, 0.7969263, 0.7044141, 0.8763095 ]
+    payload = (psi,)
+  else:
+    payload = tuple()
+
   qct = globals()[f'qc_{args.name}']
-  if 'print_circuit_once':
-    print(qct(qv, np.zeros([args.dim])))
-  f = lambda x: np.asarray(ProbsMeasure([0], QProg() << qct(qv, x), qvm, qv))
+  if 'print_circuit_once': print(qct(qv, np.zeros([args.dim]), *payload))
+  f = lambda x: np.asarray(ProbsMeasure([0], QProg() << qct(qv, x, *payload), qvm, qv))
 
   if args.dim == 2:
     X, Y, O = grid_query_2d(f)
