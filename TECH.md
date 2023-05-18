@@ -4,8 +4,6 @@
 
 ----
 
-### Simple facts
-
 ⚪ rotation gates
 
 ```
@@ -37,6 +35,10 @@ hence we have:
   = R(w*x + b)
   = R^w(x) * R(b)
 ```
+
+⚪ mathematical model of toy YouroQNet
+
+=> see `vis_qc_aprior.py`
 
 ----
 

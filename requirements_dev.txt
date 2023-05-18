@@ -5,6 +5,7 @@ torch
 scikit-learn
 scikit-learn-intelex
 fasttext
+sympy
 
 # helper
 pyreadline

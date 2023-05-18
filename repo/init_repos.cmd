@@ -23,6 +23,12 @@ git clone https://github.com/helloerikaaa/quweeting
 git clone https://github.com/HalaBench/Quantum_ML
 git clone https://github.com/Levyya/ComplexQNN
 
+REM tiny-q as scaffold
+git clone https://github.com/Kahsolt/Tiny-Q
+PUSHD Tiny-Q
+python setup.py install
+POPD
+
 ECHO Done!
 ECHO.
 
