@@ -173,8 +173,8 @@ def get_YouroQNet(args) -> QModelInit:
 
   if 'hparam':
     # qubits: |p> for context, |q> for data buffer
-    #n_qubit_p = int(np.ceil(np.log2(args.n_class)))     # FIXME: need at leaset `n_class - 1`` qubits
-    n_qubit_p = args.n_class if args.n_class > 2 else 1
+    #n_qubit_p = int(np.ceil(np.log2(args.n_class)))      # FIXME: need at leaset `n_class - 1`` qubits
+    n_qubit_p = args.n_class if args.n_class > 2 else 1   # use single-qubit for binary clf
     n_qubit_q = args.n_len
     n_qubit   = n_qubit_p + n_qubit_q
 
@@ -362,14 +362,13 @@ def embed_norm(args, x:NDArray) -> NDArray:
 def prob_joint_to_marginal(x:QTensor) -> QTensor:
   ''' probability distribution projection '''
   B, D = x.shape
-  if D == 2:
-    # for binary clf, keep it [B, D=2]
-    return x
-  else:
-    # for multi-clf, accumulate joint-distro to marginal-distro [B, D=16=2^4] => [B, D=4=NC]
-    NC = int(np.sqrt(D))
-    #return tensor.stack([x[:, 2**k] for k in range(NC)], axis=1)
-    return x[:, :NC]
+  NC = int(np.sqrt(D))
+
+  # for binary-clf, return as is
+  if NC == 1: return x
+  # for multi-clf, accumulate joint-distro to marginal-distro [B, D=16=2^4] => [B, D=4=NC]
+  #return tensor.stack([x[:, 2**k] for k in range(NC)], axis=1)
+  return x[:, :NC]
 
 
 def test(args, model:QModel, criterion, test_loader:Dataloader, logger:Logger) -> Metrics:
@@ -422,7 +421,7 @@ def train(args, model:QModel, optimizer, criterion, train_loader:Dataloader, tes
 
       pred = argmax(probs)
 
-      if not 'debug':
+      if args.debug_step:
         print('probs:', probs)
         print('Y:', Y)
         print('true:', Y_np.argmax(-1))
@@ -641,6 +640,7 @@ def get_args():
   parser.add_argument('--n_vote', default=5, type=int, help='max number of voters at inference time')
   # misc
   parser.add_argument('--seed', default=RAND_SEED, type=int, help='rand seed')
+  parser.add_argument('--debug_step', action='store_true', help='debug output of each training step')
   args = parser.parse_args()
   
   try_fix_randseed(args.seed)
