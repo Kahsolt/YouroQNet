@@ -133,6 +133,7 @@ if __name__ == '__main__':
   # should be fixed
   args.analyzer      = 'user'
   args.model         = 'Youro'
+  args.binary        = False
   args.n_len         = 3
   args.min_freq      = 1
   args.n_class       = 2

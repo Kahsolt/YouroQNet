@@ -174,7 +174,7 @@ def get_YouroQNet(args) -> QModelInit:
   if 'hparam':
     # qubits: |p> for context, |q> for data buffer
     #n_qubit_p = int(np.ceil(np.log2(args.n_class)))      # FIXME: need at leaset `n_class - 1`` qubits
-    n_qubit_p = args.n_class if args.n_class > 2 else 1   # use single-qubit for binary clf
+    n_qubit_p = 1 if args.binary else args.n_class        # use single-qubit for binary clf
     n_qubit_q = args.n_len
     n_qubit   = n_qubit_p + n_qubit_q
 
@@ -248,7 +248,10 @@ def get_YouroQNet(args) -> QModelInit:
       theta = theta.reshape(len(buf), n_repeat, -1)   # [L=16, n_repeat=4, n_gate_param=2]
 
       # build circuit
-      qc = QCircuit() # << H(qv)
+      qc = QCircuit()
+      if args.init_H:   qc << H(qv)
+      if args.init_H_p: qc << H(ctx)
+      if args.init_H_q: qc << H(buf)
       # NOTE: to keep code syntacical aligned, use the last portion for init
       qc << build_ctx_tranx(psi_T[-1, :]) \
          << BARRIER(qv)
@@ -331,7 +334,7 @@ def gen_dataloader(args, dataset:Dataset, vocab:Vocab, shuffle:bool=False) -> Da
         if i + j >= N: break
 
         idx = indexes[i + j]
-        lbl = np.int32(Y[idx] == args.binary) if args.binary > 0 else Y[idx]
+        lbl = np.int32(Y[idx] == args.tgt_cls) if args.binary else Y[idx]
         ids = sent_to_ids (T[idx], preproc_pack)
         tgt = id_to_onehot(lbl, args.n_class)
         
@@ -370,14 +373,14 @@ def embed_norm(args, x:NDArray) -> NDArray:
   if not args.embed_norm: return x
   return (2 * np.arctan(x)) * args.embed_norm        # [-k*pi, k*pi]
 
-def prob_joint_to_marginal(x:QTensor) -> QTensor:
+def prob_joint_to_marginal(args, x:QTensor) -> QTensor:
   ''' probability distribution projection '''
+  # for binary-clf, return as is
+  if args.binary: return x
+
+  # for multi-clf, accumulate joint-distro to marginal-distro [B, D=16=2^4] => [B, D=4=NC]
   B, D = x.shape
   NC = int(np.log2(D))
-
-  # for binary-clf, return as is
-  if NC == 1: return x
-  # for multi-clf, accumulate joint-distro to marginal-distro [B, D=16=2^4] => [B, D=4=NC]
   #return tensor.stack([x[:, 2**k] for k in range(NC)], axis=1)
   return x[:, :NC]
 
@@ -391,7 +394,7 @@ def test(args, model:QModel, criterion, test_loader:Dataloader, logger:Logger) -
     X, Y = to_qtensor(X_np, Y_np)
   
     joint_probs = model(X)
-    probs = prob_joint_to_marginal(joint_probs)
+    probs = prob_joint_to_marginal(args, joint_probs)
     l = criterion(Y, probs)
     pred = argmax(probs)
 
@@ -425,7 +428,7 @@ def train(args, model:QModel, optimizer, criterion, train_loader:Dataloader, tes
 
       optimizer.zero_grad()
       joint_probs = model(X)
-      probs = prob_joint_to_marginal(joint_probs)
+      probs = prob_joint_to_marginal(args, joint_probs)
       l = criterion(Y, probs)
       l.backward()
       optimizer._step()
@@ -433,6 +436,7 @@ def train(args, model:QModel, optimizer, criterion, train_loader:Dataloader, tes
       pred = argmax(probs)
 
       if args.debug_step:
+        print('joint_probs:', joint_probs)
         print('probs:', probs)
         print('Y:', Y)
         print('true:', Y_np.argmax(-1))
@@ -475,7 +479,7 @@ def infer(args, model:QModel, sent:str, tokenizer:Tokenizer, word2id:Vocab) -> V
 
   X = to_qtensor(X_np)    # [V, mL]
   joint_probs = model(X)  # [V, 2^NC]
-  probs = prob_joint_to_marginal(joint_probs)
+  probs = prob_joint_to_marginal(args, joint_probs)
   pred = argmax(probs)   # [V]
   votes = pred.to_numpy().tolist()
   return votes
@@ -638,6 +642,10 @@ def get_args():
   parser.add_argument('--SEC_rots',    default='RY,RZ',   help=f'choose multi from {gates_to_names(VALID_SEC_ROTS)}, comma seperate')
   parser.add_argument('--SEC_entgl',   default='CNOT',    help=f'choose one from {gates_to_names(VALID_SEC_ENTGL)}')
   parser.add_argument('--CMC_rots',    default='RY,RZ',   help=f'choose multi from {gates_to_names(VALID_CMC_ROTS)}, comma seperate')
+  # model (experimental)
+  parser.add_argument('--init_H',    action='store_true', help='init the whole ansatz with H, this does NOT work')
+  parser.add_argument('--init_H_p',  action='store_true', help='init |p> with H, this seems NOT work')
+  parser.add_argument('--init_H_q',  action='store_true', help='init |q> with H, this does NOT work')
   # train
   parser.add_argument('-O', '--optim',      default='Adam', choices=['SGD', 'Adam'],  help='optimizer')
   parser.add_argument('-G', '--grad_meth',  default='fd',   choices=GRAD_METH.keys(), help='grad method')
@@ -650,10 +658,11 @@ def get_args():
   # infer
   parser.add_argument('--n_vote', default=5, type=int, help='max number of voters at inference time')
   # misc
-  parser.add_argument('--seed', default=RAND_SEED, type=int, help='rand seed')
-  parser.add_argument('--debug_step', action='store_true', help='debug output of each training step')
-  parser.add_argument('--binary', default=-1, type=int, help='force binary clf, set the target class-1 label')
-  parser.add_argument('--limit',  default=-1, type=int, help='limit train data')
+  parser.add_argument('--seed',       default=RAND_SEED, type=int, help='rand seed')
+  parser.add_argument('--debug_step', action='store_true',  help='debug output of each training step')
+  parser.add_argument('--binary',     action='store_true',  help='force binary clf mode, override --n_class and read from --tgt_cls')
+  parser.add_argument('--tgt_cls',    default=0,  type=int, help='relabel the tgt_cls as 1, otherwise 0')
+  parser.add_argument('--limit',      default=-1, type=int, help='limit train data samples')
   args = parser.parse_args()
   
   try_fix_randseed(args.seed)
@@ -663,8 +672,8 @@ def get_args():
 if __name__ == '__main__':
   args = get_args()
 
-  if args.binary > 0:
-    print('>> force binary clf, override n_class = 2')
+  if args.binary:
+    print('>> binary mode: n_class=2, n_qubit_p=1')
     args.n_class = 2
 
   go_train(args)
