@@ -377,15 +377,16 @@ def get_args():
   args = parser.parse_args()
 
   try_fix_randseed(args.seed)
-  return args
-
-
-if __name__ == '__main__':
-  args = get_args()
 
   if args.model.startswith('cnn'):
     print('The TextCNN models are possibly causing C-level kernel dump in loss.backward() !!')
     print('Do not know why, might be bugs of pyvqnet :(')
     print('=> please use `run_baseline_tc.py` instead :)')
+
+  return args
+
+
+if __name__ == '__main__':
+  args = get_args()
 
   go_train(args)

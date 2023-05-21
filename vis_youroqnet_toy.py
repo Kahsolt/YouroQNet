@@ -56,37 +56,26 @@ if __name__ == '__main__':
   parser = get_parser()
   parser.add_argument('--bias', default='neu', choices=['neu', 'pos', 'neg'], help='bias neutral words towards')
   parser.add_argument('--tri', action='store_true', help='3-clf of pos/neg/neu')
-  args = parser.parse_args()
+  args = get_args(parser)
 
   print('>> Configs for the toy YouorQNet is finetuned, fixed and hard-coded, for further theoretical study :)')
   print('>> Be careful if you wanna modify this code indeed!! (e.g. make backups)')
 
   # model
-  args.n_repeat   = 1
-  args.embed_var  = 0.2
-  args.embed_norm = 1
   args.SEC_rots   = 'RY'
   args.SEC_entgl  = 'CNOT'
   args.CMC_rots   = 'RY'
   # train
   args.epochs     = 75
   args.batch_size = 1
-  args.lr         = 0.01
-  args.optim      = 'Adam'
-  args.grad_meth  = 'fd'
-  args.grad_dx    = 0.01
 
   # should be fixed
-  args.analyzer      = 'user'
-  args.model         = 'Youro'
-  args.binary        = True
-  args.n_len         = 3
-  args.min_freq      = 1
-  args.n_class       = 2
-  args.n_vote        = 1
-  args.slog_interval = 10
-  args.log_interval  = 50
-
+  args.analyzer   = 'user'
+  args.binary     = True
+  args.n_len      = 3
+  args.min_freq   = 1
+  args.n_class    = 2
+  args.n_vote     = 1
 
   if 'bias test':
     # NOTE: ablation verify, when learning is successful (check the loss curve), there are some evidental phenomenon

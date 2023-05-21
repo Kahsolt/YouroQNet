@@ -77,8 +77,9 @@ if 'gate const & utils':
   VALID_SEC_ENTGL = D_CGATES + D_PGATES + [f'C{g.__name__}' for g in S_PGATES]
   VALID_CMC_ROTS  = S_PGATES
 
-class LogOnce:
+if 'globals':
   export_circuit = True
+  param_frozen = None
 
 
 def StrongEntangleCircuitTemplate(qv:Qubits, param:NDArray, rots:List[QGate]=[RY, RZ], entgl:Union[QGate, str]=CNOT) -> QCircuit:
@@ -142,20 +143,23 @@ def ControlMultiCircuitTemplate(q:Qubit, qv:Qubits, param:NDArray, rots:List[QGa
       qc << rot(qv[i], *args[i][j]).control(q)
   return qc
 
-def compute_circuit(cq:QCircuit, qv:Qubits, qvm:QVM, mbit:int=1, use_qnn_measure:bool=True) -> Probs:
+def compute_circuit(cq:QCircuit, qv:Qubits, qvm:QVM, index:Union[list, int, slice]=[0], use_qnn_measure:bool=False) -> Probs:
   ''' set mbit to measure on the first m-qubits '''
 
   prog = QProg() << cq
   if use_qnn_measure:
-    prob = ProbsMeasure(list(range(mbit)), prog, qvm, qv)
+    assert isinstance(index, list)
+    prob = ProbsMeasure(index, prog, qvm, qv)
   else:
-    prob = qvm.prob_run_list(prog, qv[:mbit])
+    assert isinstance(index, (int, slice))
+    prob = qvm.prob_run_list(prog, qv[index])
 
   if not 'expval':
     print('rlt:', [expval(qvm, prog, {f"Z{i}": 1}, qv) for i in range(len(qv))])
 
-  if LogOnce.export_circuit:
-    LogOnce.export_circuit = False
+  global export_circuit
+  if export_circuit:
+    export_circuit = False
     try:
       fp = TMP_PATH / 'circuit.png'
       print(f'>> save circuit to {fp}')
@@ -166,6 +170,19 @@ def compute_circuit(cq:QCircuit, qv:Qubits, qvm:QVM, mbit:int=1, use_qnn_measure
     draw_qprog_text(prog, output_file=str(fp))
 
   return prob
+
+def prob_joint_to_marginal(args, x:QTensor) -> QTensor:
+  ''' probability distribution projection '''
+  # for partial measure, return as is
+  if args.part_meas: return x
+  # for binary-clf, return as is
+  if args.binary: return x
+
+  # for multi-clf, accumulate joint-distro to marginal-distro [B, D=16=2^4] => [B, D=4=NC]
+  B, D = x.shape
+  NC = int(np.log2(D))
+  #return tensor.stack([x[:, 2**k] for k in range(NC)], axis=1)     # NOTE: this sometime not work
+  return x[:, :NC]
 
 
 def get_YouroQNet(args) -> QModelInit:
@@ -269,11 +286,41 @@ def get_YouroQNet(args) -> QModelInit:
     # split qubits
     ctx: Qubits = qv[:n_qubit_p][::-1]  # |p>, current context
     buf: Qubits = qv[n_qubit_p:]        # |q>, placeholder for input sequence
+    # alternative freeze
+    param_tht = param
+    param_psi = param
+    if args.alt:
+      global param_frozen
+      if param_frozen is None:
+        param_frozen = param
+      else:
+        if args.alt_tgt:      # NOTE: True for freeze psi
+          param_psi = param_frozen
+        else:
+          param_tht = param_frozen
+        args.alt_cnt -= 1
+        if args.alt_cnt <= 0:
+          args.alt_cnt = args.alt_step
+          args.alt_tgt = not args.alt_tgt
+          param_frozen = param
+    # param perturbation for stableness
+    if args.noise > 0:
+      noise = np.random.normal(size=param.shape) * args.noise
+      param_tht += noise
+      param_psi += noise
     # split param
-    embed = get_embed(args, param)        # whole embed table, [K, D=n_repeat*n_gate_param]
+    embed = get_embed(args, param_tht)        # whole embed table, [K, D=n_repeat*n_gate_param]
     theta = embed_lookup(args, embed, data)   # sentence related entries, [mL, D]
-    psi   = param[n_param_tht:]               # ansatz params
-    return compute_circuit(build_circuit(theta, psi), qv, qvm, n_qubit_p)
+    psi   = param_psi[n_param_tht:]           # ansatz params
+    # build & run circuit
+    qc = build_circuit(theta, psi)
+    if args.part_meas:
+      if args.binary:
+        return compute_circuit(qc, qv, qvm, index=0)
+      else:
+        return [compute_circuit(qc, qv, qvm, index=idx)[0] for idx in range(n_qubit_p)]
+    else:
+      return compute_circuit(qc, qv, qvm, index=slice(None, n_qubit_p))
 
   return BinaryCrossEntropy, YouroQNet_qdrl, n_qubit, n_param
 
@@ -326,7 +373,7 @@ def gen_dataloader(args, dataset:Dataset, vocab:Vocab, shuffle:bool=False) -> Da
     T, Y = dataset
     N = args.limit if args.limit > 0 else len(Y)
     indexes = list(range(N))
-    if shuffle: random.shuffle(indexes)
+    if shuffle and args.limit < 0: random.shuffle(indexes)
 
     for i in range(0, N, args.batch_size):
       T_batch, Y_batch = [], []
@@ -372,17 +419,6 @@ def embed_norm(args, x:NDArray) -> NDArray:
   ''' value norm raw embeddings, assure rotation angle well-ranged '''
   if not args.embed_norm: return x
   return (2 * np.arctan(x)) * args.embed_norm        # [-k*pi, k*pi]
-
-def prob_joint_to_marginal(args, x:QTensor) -> QTensor:
-  ''' probability distribution projection '''
-  # for binary-clf, return as is
-  if args.binary: return x
-
-  # for multi-clf, accumulate joint-distro to marginal-distro [B, D=16=2^4] => [B, D=4=NC]
-  B, D = x.shape
-  NC = int(np.log2(D))
-  #return tensor.stack([x[:, 2**k] for k in range(NC)], axis=1)     # NOTE: this sometime not work
-  return x[:, :NC]
 
 
 def test(args, model:QModel, criterion, test_loader:Dataloader, logger:Logger) -> Metrics:
@@ -643,14 +679,18 @@ def get_parser():
   parser.add_argument('--SEC_entgl',   default='CNOT',    help=f'choose one from {gates_to_names(VALID_SEC_ENTGL)}')
   parser.add_argument('--CMC_rots',    default='RY,RZ',   help=f'choose multi from {gates_to_names(VALID_CMC_ROTS)}, comma seperate')
   # model (experimental)
-  parser.add_argument('--init_H',    action='store_true', help='init the whole ansatz with H, this does NOT work')
-  parser.add_argument('--init_H_p',  action='store_true', help='init |p> with H, this seems NOT work')
-  parser.add_argument('--init_H_q',  action='store_true', help='init |q> with H, this does NOT work')
+  parser.add_argument('--init_H',     action='store_true', help='init the whole ansatz with H, this does NOT work')
+  parser.add_argument('--init_H_p',   action='store_true', help='init |p> with H, this seems NOT work')
+  parser.add_argument('--init_H_q',   action='store_true', help='init |q> with H, this does NOT work')
+  parser.add_argument('--noise', default=1e-5, type=float, help='add noise on param')
+  parser.add_argument('--part_meas',  action='store_true', help='PMeasure qubit by qubit, no joint measure')
+  parser.add_argument('--alt',        action='store_true', help='alternative freeze theta & psi')
+  parser.add_argument('--alt_step',  default=10, type=int, help='alt step for --alt')
   # train
   parser.add_argument('-O', '--optim',      default='Adam', choices=['SGD', 'Adam'],  help='optimizer')
   parser.add_argument('-G', '--grad_meth',  default='fd',   choices=GRAD_METH.keys(), help='grad method')
   parser.add_argument(      '--grad_dx',    default=0.01,   type=float, help='step size for finite_diff')
-  parser.add_argument('--lr',               default=0.1,    type=float)
+  parser.add_argument('--lr',               default=0.01,   type=float)
   parser.add_argument('-E', '--epochs',     default=1,      type=int)
   parser.add_argument('-B', '--batch_size', default=4,      type=int)
   parser.add_argument('--slog_interval',    default=10,     type=int, help='log loss/acc')
@@ -665,20 +705,27 @@ def get_parser():
   parser.add_argument('--limit',      default=-1, type=int, help='limit train data samples')
   return parser
 
-def get_args():
-  parser = get_parser()
+def get_args(parser=None):
+  parser = parser or get_parser()
   args = parser.parse_args()
   
   try_fix_randseed(args.seed)
+  
+  if args.binary:
+    print('>> binary mode: n_class=2, n_qubit_p=1')
+    args.n_class = 2
+  
+  if args.alt:
+    print('>> alternative training tht & psi')
+    args.alt_cnt = args.alt_step
+    args.alt_tgt = True     # NOTE: True - freeze psi, False - freeze psi
+    param_frozen = None
+
   return args
 
 
 if __name__ == '__main__':
   args = get_args()
-
-  if args.binary:
-    print('>> binary mode: n_class=2, n_qubit_p=1')
-    args.n_class = 2
 
   go_train(args)
   go_inspect(args)
