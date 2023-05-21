@@ -381,7 +381,7 @@ def prob_joint_to_marginal(args, x:QTensor) -> QTensor:
   # for multi-clf, accumulate joint-distro to marginal-distro [B, D=16=2^4] => [B, D=4=NC]
   B, D = x.shape
   NC = int(np.log2(D))
-  #return tensor.stack([x[:, 2**k] for k in range(NC)], axis=1)
+  #return tensor.stack([x[:, 2**k] for k in range(NC)], axis=1)     # NOTE: this sometime not work
   return x[:, :NC]
 
 
@@ -624,7 +624,7 @@ def go_inspect(args, name_suffix:str='', words:List[str]=None):
   savefig(out_dp / 'embed.png')
 
 
-def get_args():
+def get_parser():
   MODELS = [name[len('get_'):-len('QNet')] for name in globals() if name.startswith('get_') and name.endswith('QNet')]
 
   parser = ArgumentParser()
@@ -663,6 +663,10 @@ def get_args():
   parser.add_argument('--binary',     action='store_true',  help='force binary clf mode, override --n_class and read from --tgt_cls')
   parser.add_argument('--tgt_cls',    default=0,  type=int, help='relabel the tgt_cls as 1, otherwise 0')
   parser.add_argument('--limit',      default=-1, type=int, help='limit train data samples')
+  return parser
+
+def get_args():
+  parser = get_parser()
   args = parser.parse_args()
   
   try_fix_randseed(args.seed)
