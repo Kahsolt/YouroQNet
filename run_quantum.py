@@ -19,6 +19,9 @@ if 'pyvqnet & pyqpanda':
   # basic
   from pyvqnet import tensor
   from pyvqnet.tensor import QTensor
+  # nn
+  from pyvqnet.nn.linear import Linear
+  from pyvqnet.nn.activation import ReLu, LeakyReLu
   # qnn
   from pyvqnet.qnn.quantumlayer import QuantumLayer, QuantumLayerWithQProg, QuantumLayerMultiProcess, QuantumLayerV2, grad
   # optimizing
@@ -177,6 +180,8 @@ def prob_joint_to_marginal(args, x:QTensor) -> QTensor:
   if args.part_meas: return x
   # for binary-clf, return as is
   if args.binary: return x
+  # for mixed-net, return as is
+  if args.mnet: return x
 
   # for multi-clf, accumulate joint-distro to marginal-distro [B, D=16=2^4] => [B, D=4=NC]
   B, D = x.shape
@@ -324,16 +329,40 @@ def get_YouroQNet(args) -> QModelInit:
 
   return BinaryCrossEntropy, YouroQNet_qdrl, n_qubit, n_param
 
+get_YouroMNet = get_YouroQNet
+
+class MNet(Module):
+
+  def __init__(self, args, qnn:QModel):
+    super().__init__()
+
+    self.args = args
+    self.qnn = qnn
+    self.act = ReLu()
+
+    assert hasattr(args, 'n_qubit_p'), 'missing args.n_qubit_p'
+    self.linear = Linear(2**args.n_qubit_p, args.n_class)
+    args.n_param_linear = sum([p.size for p in self.linear.parameters() if p.requires_grad])
+  
+  def forward(self, x:QTensor):
+    z = self.qnn(x)
+    z = self.act(z)
+    o = self.linear(z)
+    return o
+
 
 def get_model_and_criterion(args) -> Tuple[QModel, Callable]:
-  loss_cls, compute_circuit, n_qubit, n_param = globals()[f'get_{args.model}QNet'](args)
+  loss_cls, compute_circuit, n_qubit, n_param = globals()[f'get_{args.model}Net'](args)
   model = QuantumLayer(compute_circuit, n_param, 'cpu', n_qubit, 0, GRAD_METH[args.grad_meth], args.grad_dx)
   model.m_para.fill_rand_normal_(m=0, s=args.embed_var)
   if not 'use uniform inits, they do not work in most cases :(':
     model.m_para.fill_rand_uniform_(v=1)
     model.m_para.fill_rand_signed_uniform_(v=1)
     model.m_para.fill_rand_uniform_with_bound_(-np.pi/2, np.pi/2)
-  return model, loss_cls()
+  
+  args.mnet = args.model.endswith('M')
+  if args.mnet: return MNet(args, model), SoftmaxCrossEntropy()
+  else:         return model, loss_cls()
 
 def get_vocab(args) -> Vocab:
   analyzer: str = args.analyzer
@@ -672,7 +701,7 @@ def go_inspect(args, name_suffix:str='', words:List[str]=None):
 
 
 def get_parser():
-  MODELS = [name[len('get_'):-len('QNet')] for name in globals() if name.startswith('get_') and name.endswith('QNet')]
+  MODELS = [name[len('get_'):-len('Net')] for name in globals() if name.startswith('get_') and name.endswith('Net')]
 
   parser = ArgumentParser()
   # preprocess
@@ -680,7 +709,7 @@ def get_parser():
   parser.add_argument('-P', '--pad',      default='\x00',      help='model input pad')
   parser.add_argument('--min_freq',       default=5, type=int, help='min_freq for final embedding vocab')
   # model
-  parser.add_argument('-M', '--model', default='Youro',   choices=MODELS, help='model name')
+  parser.add_argument('-M', '--model', default='YouroQ',  choices=MODELS, help='model name')
   parser.add_argument('--n_len',       default=8,         type=int,       help='model input length (in tokens), aka. n_qubit_q')
   parser.add_argument('--n_class',     default=N_CLASS,   type=int,       help='num of class, aka. n_qubit_p')
   parser.add_argument('--n_repeat',    default=1,         type=int,       help='circuit n_repeat, effecting embed depth')
