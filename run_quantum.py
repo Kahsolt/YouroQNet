@@ -22,6 +22,7 @@ if 'pyvqnet & pyqpanda':
   # nn
   from pyvqnet.nn.linear import Linear
   from pyvqnet.nn.activation import ReLu, LeakyReLu
+  from pyvqnet.nn.dropout import Dropout
   # qnn
   from pyvqnet.qnn.quantumlayer import QuantumLayer, QuantumLayerWithQProg, QuantumLayerMultiProcess, QuantumLayerV2, grad
   # optimizing
@@ -118,13 +119,11 @@ def StrongEntangleCircuitTemplate(qv:Qubits, param:NDArray, rots:List[QGate]=[RY
   if entgl_has_control:
     for i in range(nq - 1):
       qc << entgl(qv[i], qv[i + 1], *args_e[i])
-    if nq >= 3:
-      qc << entgl(qv[i + 1], qv[0], *args_e[i+1])   # loopback
+    if nq >= 3: qc << entgl(qv[i + 1], qv[0], *args_e[i+1])   # loopback
   else:
     for i in range(nq - 1):
       qc << entgl(qv[i + 1], *args_e[i]).control(qv[i])
-    if nq >= 3:
-      qc << entgl(qv[0], *args_e[i+1]).control(qv[i + 1])   # loopback
+    if nq >= 3: qc << entgl(qv[0], *args_e[i+1]).control(qv[i + 1])   # loopback
   return qc
 
 def ControlMultiCircuitTemplate(q:Qubit, qv:Qubits, param:NDArray, rots:List[QGate]=[RY, RZ]) -> QCircuit:
@@ -186,8 +185,8 @@ def prob_joint_to_marginal(args, x:QTensor) -> QTensor:
   # for multi-clf, accumulate joint-distro to marginal-distro [B, D=16=2^4] => [B, D=4=NC]
   B, D = x.shape
   NC = int(np.log2(D))
-  #return tensor.stack([x[:, 2**k] for k in range(NC)], axis=1)     # NOTE: this sometime not work
-  return x[:, :NC]
+  return tensor.stack([x[:, 2**k] for k in range(NC)], axis=1)     # NOTE: this sometime not work
+  #return x[:, :NC]
 
 
 def get_YouroQNet(args) -> QModelInit:
@@ -331,23 +330,28 @@ def get_YouroQNet(args) -> QModelInit:
 
 get_YouroMNet = get_YouroQNet
 
-class MNet(Module):
+class MLP(Module):
 
   def __init__(self, args, qnn:QModel):
     super().__init__()
 
     self.args = args
     self.qnn = qnn
-    self.act = ReLu()
 
     assert hasattr(args, 'n_qubit_p'), 'missing args.n_qubit_p'
-    self.linear = Linear(2**args.n_qubit_p, args.n_class)
-    args.n_param_linear = sum([p.size for p in self.linear.parameters() if p.requires_grad])
-  
+    self.fc1 = Linear(2**args.n_qubit_p, 2*args.n_qubit_p)
+    self.act = ReLu()
+    self.drp = Dropout(0.35)
+    self.fc2 = Linear(2*args.n_qubit_p, args.n_class)
+    args.n_param_linear = sum([p.size for p in self.fc1.parameters() if p.requires_grad]) + \
+                          sum([p.size for p in self.fc2.parameters() if p.requires_grad])
+    
   def forward(self, x:QTensor):
     z = self.qnn(x)
-    z = self.act(z)
-    o = self.linear(z)
+    o = self.fc1(z)
+    o = self.act(o)
+    o = self.drp(o)
+    o = self.fc2(o)
     return o
 
 
@@ -361,7 +365,7 @@ def get_model_and_criterion(args) -> Tuple[QModel, Callable]:
     model.m_para.fill_rand_uniform_with_bound_(-np.pi/2, np.pi/2)
   
   args.mnet = args.model.endswith('M')
-  if args.mnet: return MNet(args, model), SoftmaxCrossEntropy()
+  if args.mnet: return MLP(args, model), SoftmaxCrossEntropy()
   else:         return model, loss_cls()
 
 def get_vocab(args) -> Vocab:
@@ -388,21 +392,21 @@ def get_word_mappings(args, symbols:List[str]) -> Tuple[VocabI, VocabI]:
 
 def get_preprocessor_pack(args, vocab:Vocab) -> PreprocessPack:
   tokenizer = list if args.analyzer == 'char' else make_tokenizer(vocab)
-  aligner = lambda x: align_words(x, args.n_len, args.pad)
   word2id, id2word = get_word_mappings(args, list(vocab.keys()))
   PAD_ID = word2id.get(args.pad, -1)
+  aligner = lambda x: align_ids(x, args.n_len, PAD_ID)
   return tokenizer, aligner, word2id, id2word, PAD_ID
 
 def gen_dataloader(args, dataset:Dataset, vocab:Vocab, shuffle:bool=False) -> Dataloader:
   preproc_pack = get_preprocessor_pack(args, vocab)
 
-  def iter_by_batch() -> Tuple[NDArray, NDArray]:
-    nonlocal args, dataset, preproc_pack, shuffle
+  T, Y = dataset
+  N = args.limit if args.limit > 0 else len(Y)
+  indexes = list(range(N))
+  if shuffle: random.shuffle(indexes)
 
-    T, Y = dataset
-    N = args.limit if args.limit > 0 else len(Y)
-    indexes = list(range(N))
-    if shuffle and args.limit < 0: random.shuffle(indexes)
+  def iter_by_batch() -> Tuple[NDArray, NDArray]:
+    nonlocal args, T, Y, preproc_pack, shuffle
 
     for i in range(0, N, args.batch_size):
       T_batch, Y_batch = [], []
@@ -425,6 +429,8 @@ def gen_dataloader(args, dataset:Dataset, vocab:Vocab, shuffle:bool=False) -> Da
       if len(T_batch) == args.batch_size:
         yield [np.stack(e, axis=0).astype(np.int32) for e in [T_batch, Y_batch]]
   
+    if shuffle and args.limit < 0: random.shuffle(indexes)
+
   return iter_by_batch    # return a DataLoader generator
 
 def get_ansatz(args, param:NDArray) -> NDArray:
@@ -589,7 +595,8 @@ def go_train(args, user_vocab_data:Tuple[Vocab, Dataset, Dataset]=None, name_suf
 
   # train
   losses_and_accs = train(args, model, optimizer, criterion, train_loader, test_loader, logger)
-  params = model.m_para.to_numpy()
+  if args.mnet: params = model.qnn.m_para.to_numpy()
+  else:         params = model    .m_para.to_numpy()
 
   # plot
   plot_loss_and_acc(losses_and_accs, out_dp / PLOT_FILE, title=args.expname)
@@ -706,8 +713,8 @@ def get_parser():
   parser = ArgumentParser()
   # preprocess
   parser.add_argument('-L', '--analyzer', default='kgram+', choices=ANALYZERS, help='tokenize level')
-  parser.add_argument('-P', '--pad',      default='\x00',      help='model input pad')
-  parser.add_argument('--min_freq',       default=5, type=int, help='min_freq for final embedding vocab')
+  parser.add_argument('-P', '--pad',      default='\x00',       help='model input pad')
+  parser.add_argument('--min_freq',       default=10, type=int, help='min_freq for final embedding vocab')
   # model
   parser.add_argument('-M', '--model', default='YouroQ',  choices=MODELS, help='model name')
   parser.add_argument('--n_len',       default=8,         type=int,       help='model input length (in tokens), aka. n_qubit_q')
@@ -759,8 +766,7 @@ def get_args(parser=None):
   if args.alt:
     print('>> alternative training tht & psi')
     args.alt_cnt = args.alt_step
-    args.alt_tgt = True     # NOTE: True - freeze psi, False - freeze psi
-    param_frozen = None
+    args.alt_tgt = False     # NOTE: True for freeze psi
 
   return args
 

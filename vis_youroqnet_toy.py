@@ -13,14 +13,14 @@ def go_all(args):
   global vocab
 
   # preprocess: see run_quantum.gen_dataloader()
-  tokenizer, aligner, word2id, _, PAD_ID = get_preprocessor_pack(args, vocab)
+  preproc_pack = tokenizer, aligner, word2id, _, PAD_ID = get_preprocessor_pack(args, vocab)
   id2word = {v: k for k, v in word2id.items()}
 
   def preprocess(data):
     T_batch, Y_batch = [], []
     for lbl, txt in data:
-      T_batch.append(np.asarray([word2id.get(w, PAD_ID) for w in aligner(tokenizer(txt))]))
-      Y_batch.append(np.eye(args.n_class)[lbl])
+      T_batch.append(sent_to_ids (txt, preproc_pack))
+      Y_batch.append(id_to_onehot(lbl, args.n_class))
     return [np.stack(e, axis=0).astype(np.int32) for e in [T_batch, Y_batch]]
 
   # dataset

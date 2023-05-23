@@ -212,16 +212,16 @@ def clean_text(sent:str) -> str:
   except: print_exc()
   return s
 
-def align_words(words:List[str], n_limit:int, pad:str='') -> List[str]:
-  nlen = len(words)
-  if nlen == n_limit: return words
-  if nlen  < n_limit: return words + [pad] * (n_limit - nlen)
+def align_ids(ids:List[int], n_limit:int, pad:int=-1) -> List[int]:
+  nlen = len(ids)
+  if nlen == n_limit: return ids
+  if nlen  < n_limit: return ids + [pad] * (n_limit - nlen)
   cp = random.randrange(nlen - n_limit)
-  return words[cp : cp + n_limit]
+  return ids[cp : cp + n_limit]
 
 def sent_to_ids(sent:str, packed:'PreprocessPack') -> NDArray:
-  tokenizer, aligner, word2id, _, PAD_ID = packed
-  return np.asarray([word2id.get(w, PAD_ID) for w in aligner(tokenizer(sent))])
+  tokenizer, aligner, word2id, _, _ = packed
+  return np.asarray(aligner([word2id[w] for w in tokenizer(sent) if w in word2id]), dtype=np.int32)
 
 def ids_to_sent(ids:List[int], packed:'PreprocessPack') -> str:
   _, _, _, id2word, PAD_ID = packed
