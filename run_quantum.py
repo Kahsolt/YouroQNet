@@ -516,8 +516,8 @@ def infer(args, model:QModel, sent:str, tokenizer:Tokenizer, word2id:Vocab) -> V
   X = to_qtensor(X_np)    # [V, mL]
   joint_probs = model(X)  # [V, 2^NC]
   probs = prob_joint_to_marginal(args, joint_probs)
-  pred = argmax(probs)   # [V]
-  votes = pred.to_numpy().tolist()
+  pred = argmax(probs)    # [V]
+  votes = pred.to_numpy().astype(np.int32).tolist()
   return votes
 
 
@@ -592,20 +592,30 @@ def go_train(args, user_vocab_data:Tuple[Vocab, Dataset, Dataset]=None, name_suf
 def go_infer(args, texts:List[str]=None, name_suffix:str='') -> Union[Votes, Inferer]:
   # configs
   out_dp: Path = LOG_PATH / args.analyzer / f'{args.model}{name_suffix}'
-  assert out_dp.exists(), 'you must train this model before you can infer from :('
+  model_fp = out_dp / MODEL_FILE
+  assert model_fp.exists(), 'you must train this model before you can infer from :('
   
-  # model
-  model, _ = get_model_and_criterion(args)
-  load_ckpt(model, out_dp / MODEL_FILE)
+  # hparam load
+  hparam = json_load(out_dp / TASK_FILE)['hparam']
+  for k, v in hparam.items():
+    if not hasattr(args, k):
+      setattr(args, k, v)
+  
+  # ignore training settings
+  global export_circuit
+  export_circuit = False
+  args.noise = 0.0
+  args.alt = None
 
-  # symbols (codebook)
+  # symbols (codebook) & preprocessor
   vocab = get_vocab(args)
-  args.n_vocab = len(vocab) + 1  # <PAD>
-
-  # preprocessor
   tokenizer = list if args.analyzer == 'char' else make_tokenizer(vocab)
   word2id, _ = get_word_mappings(args, list(vocab.keys()))
 
+  # model
+  model, _ = get_model_and_criterion(args)
+  load_ckpt(model, model_fp)
+  
   # make a inferer callable if no text given
   if texts is None:
     return lambda sent: infer(args, model, sent, tokenizer, word2id)
@@ -643,6 +653,7 @@ def go_inspect(args, name_suffix:str='', words:List[str]=None):
   embed = get_embed(args, param)
   K, D = embed.shape
   print('embed.shape:', embed.shape)
+  embed = embed[:10, :]     # NOTE: show only first some entries
 
   # plot
   embed_n  = embed_norm(args, embed)
@@ -699,6 +710,7 @@ def get_parser():
   parser.add_argument('--n_vote', default=5, type=int, help='max number of voters at inference time')
   # misc
   parser.add_argument('--seed',       default=RAND_SEED, type=int, help='rand seed')
+  parser.add_argument('--inspect',    action='store_true',  help='run embed inspect only')
   parser.add_argument('--debug_step', action='store_true',  help='debug output of each training step')
   parser.add_argument('--binary',     action='store_true',  help='force binary clf mode, override --n_class and read from --tgt_cls')
   parser.add_argument('--tgt_cls',    default=0,  type=int, help='relabel the tgt_cls as 1, otherwise 0')
@@ -726,6 +738,10 @@ def get_args(parser=None):
 
 if __name__ == '__main__':
   args = get_args()
+
+  if args.inspect:
+    go_inspect(args)
+    exit(0)
 
   go_train(args)
   go_inspect(args)
