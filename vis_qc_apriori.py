@@ -65,9 +65,17 @@ if 'Tiny-Q style gates, but symbolic':
   # approx gates
   sin_hat = lambda x: 2.4 / pi * x
   cos_hat = lambda x: 1 - (2 / pi * x)**2
+  RX_approx = lambda x: np.asarray([
+    [cos_hat(S(x)/2), -i*sin_hat(S(x)/2)],
+    [-i*sin_hat(S(x)/2), cos_hat(S(x)/2)],
+  ])
   RY_approx = lambda x: np.asarray([
     [cos_hat(S(x)/2), -sin_hat(S(x)/2)],
     [sin_hat(S(x)/2),  cos_hat(S(x)/2)],
+  ])
+  RZ_approx = lambda x: np.asarray([
+    [cos_hat(S(x)/2)-i*sin_hat(S(x)/2), 0],
+    [0, cos_hat(S(x)/2)+i*sin_hat(S(x)/2)],
   ])
   CRY_approx = lambda x: np.asarray([
     [1, 0, 0, 0],
@@ -114,18 +122,26 @@ def go_single_qubit_encoder():
   # q_0: |0>─┤RX(tht0)├─┤RY(tht1)├─┤RZ(tht2)├─
   #          └────────┘ └────────┘ └────────┘ 
 
-  def build_circuit():
+  def build_circuit(RX, RY, RZ):
     c0 = RX('θ_0')
     c1 = RY('θ_1')
     c2 = RZ('θ_2')
     qc = c2 @ c1 @ c0
     return qc
-
-  run_circuit(build_circuit())
+  
+  # run the accurate circuit
+  run_circuit(build_circuit(RX, RY, RZ))
 
   # prob on:
   # |0>: exp( im(θ_2)/2) * Abs(I*sin(θ_0/2)*sin(θ_1/2) + cos(θ_0/2)*cos(θ_1/2))
   # |1>: exp(-im(θ_2)/2) * Abs(I*sin(θ_0/2)*cos(θ_1/2) - sin(θ_1/2)*cos(θ_0/2))
+
+  # run the approx circuit
+  run_circuit(build_circuit(RX_approx, RY_approx, RZ_approx))
+
+  # prob on:
+  # |0>: (-1.44*I*pi**2*θ_0*θ_1 - (θ_0**2 - pi**2)*(θ_1**2 - pi**2))*(θ_2**2 + 1.2*I*pi*θ_2 - pi**2)/pi**6
+  # |1>: 1.2*(I*θ_0*(θ_1**2 - pi**2) - θ_1*(θ_0**2 - pi**2))*(-θ_2**2 + 1.2*I*pi*θ_2 + pi**2)/pi**5
 
 
 def go_YouroQNet_toy():
