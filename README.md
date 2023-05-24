@@ -80,7 +80,7 @@ A subset from [simplifyweibo_4_moods](https://github.com/SophonPlus/ChineseNlpCo
   - [x] sklearn
   - [x] vqnet-classical
 - [ ] quantum models
-  - [x] quantum embedding
+  - [ ] quantum embedding
   - [ ] model route on different length
   - [x] multi to binary clf
   - [ ] contrastive learning
@@ -123,7 +123,7 @@ run_baseline_*.py   # classical experiments
 run_baseline.cmd    # run script for run_baseline_*.py
 run_quantum.py      # quantum experiments
 run_quantum.cmd     # run script for run_quantum.py
-run_quantum_toy.py  # toy QNN for debug and verify
+run_quantum_toy.cmd # toy QNN for debug and verify
 
 # misc
 vis_*.py            # intercative demos or debug scaffolds
@@ -162,9 +162,10 @@ LICESE
 => find thesis of related work in [ref/init_thesis.cmd](ref/init_thesis.cmd)  
 => find implementations of related work in [repo/init_repos.cmd](repo/init_repos.cmd)  
 
+
 ### Citation
 
-If you find our work useful, please give a star ⭐ and cite us~ 😃
+If you find this work useful, please give a star ⭐ and cite~ 😃
 
 ```
 @misc{kahsolt2023,

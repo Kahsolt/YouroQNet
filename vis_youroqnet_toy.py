@@ -62,20 +62,19 @@ if __name__ == '__main__':
   print('>> Be careful if you wanna modify this code indeed!! (e.g. make backups)')
 
   # model
-  args.SEC_rots   = 'RY'
-  args.SEC_entgl  = 'CNOT'
-  args.CMC_rots   = 'RY'
+  args.SEC_rots  = 'RY'
+  args.SEC_entgl = 'CNOT'
+  args.CMC_rots  = 'RY'
   # train
-  args.epochs     = 75
-  args.batch_size = 1
+  args.epochs    = 75
 
   # should be fixed
-  args.analyzer   = 'user'
-  args.binary     = True
-  args.n_len      = 3
-  args.min_freq   = 1
-  args.n_class    = 2
-  args.n_vote     = 1
+  args.analyzer  = 'user'
+  args.binary    = True
+  args.n_len     = 3
+  args.min_freq  = 1
+  args.n_class   = 2
+  args.n_vote    = 1
 
   if 'bias test':
     # NOTE: ablation verify, when learning is successful (check the loss curve), there are some evidental phenomenon
@@ -109,9 +108,9 @@ if __name__ == '__main__':
     if args.tri:
       args.binary    = False
       args.n_class   = 3
-      args.SEC_rots  = 'RY'
-      args.SEC_entgl = 'CRY'
-      args.CMC_rots  = 'RY'
+      args.SEC_rots  = 'RY,RZ'
+      args.SEC_entgl = 'CNOT'
+      args.CMC_rots  = 'RY,RZ'
       
       train_data_cls2 = [
         (2, '啊你我'),

@@ -32,6 +32,8 @@ if 'pyvqnet & pyqpanda':
   from pyvqnet.qnn.opt import SPSA, QNG
   # ckpt
   from pyvqnet.utils.storage import load_parameters
+  # randseed
+  from pyvqnet.utils import set_random_seed, get_random_seed
 
 import numpy as np
 
@@ -417,11 +419,10 @@ def gen_dataloader(args, dataset:Dataset, vocab:Vocab, shuffle:bool=False) -> Da
         lbl = np.int32(Y[idx] == args.tgt_cls) if args.binary else Y[idx]
         ids = sent_to_ids (T[idx], preproc_pack)
         tgt = id_to_onehot(lbl, args.n_class)
-        
+
         if args.debug_step:
-          print('txt:', ids_to_sent(ids, preproc_pack))
+          print('txt/lbl:', ids_to_sent(ids, preproc_pack), '/', lbl)
           print('ids:', ids)
-          print('lbl:', lbl)
 
         T_batch.append(ids)
         Y_batch.append(tgt)
@@ -507,9 +508,10 @@ def train(args, model:QModel, optimizer, criterion, train_loader:Dataloader, tes
       pred = argmax(probs)
 
       if args.debug_step:
-        print('joint_probs:', joint_probs)
+        if not any([args.part_meas, args.binary, args.mnet]):
+          print('joint_probs:', joint_probs)
         print('probs:', probs)
-        print('Y:', Y)
+        #print('Y:', Y)
         print('true:', Y_np.argmax(-1))
         print('pred:', pred.to_numpy().astype(np.int32))
 
@@ -539,14 +541,13 @@ def train(args, model:QModel, optimizer, criterion, train_loader:Dataloader, tes
 
 def infer(args, model:QModel, sent:str, tokenizer:Tokenizer, word2id:Vocab) -> Votes:
   PAD_ID = word2id.get(args.pad, -1)
-  toks = tokenizer(clean_text(sent))
-  if len(toks) < args.n_len:
-    toks = align_words(toks, args.n_len, args.pad)
+  ids = [word2id[w] for w in tokenizer(clean_text(sent)) if w in word2id]    # [L]
+  if len(ids) < args.n_len:
+    ids = align_ids(ids, args.n_len, PAD_ID)
 
-  ids = np.asarray([word2id.get(w, PAD_ID) for w in toks], dtype=np.int32)  # [L]
   possible_sp = list(range(len(ids) - args.n_len + 1))
   choose_sp = possible_sp if len(possible_sp) <= args.n_vote else random.sample(possible_sp, args.n_vote)
-  X_np = np.stack([ ids[sp:sp+args.n_len] for sp in choose_sp ], axis=0)   # [V, mL=16]
+  X_np = np.stack([ids[sp:sp+args.n_len] for sp in choose_sp], axis=0)   # [V, mL=16]
 
   X = to_qtensor(X_np)    # [V, mL]
   joint_probs = model(X)  # [V, 2^NC]
@@ -684,7 +685,8 @@ def go_inspect(args, name_suffix:str='', words:List[str]=None):
 
   # embed load
   ckpt = load_parameters(out_dp / MODEL_FILE)
-  param = ckpt['m_para'].to_numpy()
+  if args.mnet: param = ckpt['qnn.m_para'].to_numpy()
+  else:         param = ckpt    ['m_para'].to_numpy()
   print('param.shape:', param.shape)
   embed = get_embed(args, param)
   K, D = embed.shape
@@ -719,7 +721,7 @@ def get_parser():
   parser.add_argument('-M', '--model', default='YouroQ',  choices=MODELS, help='model name')
   parser.add_argument('--n_len',       default=8,         type=int,       help='model input length (in tokens), aka. n_qubit_q')
   parser.add_argument('--n_class',     default=N_CLASS,   type=int,       help='num of class, aka. n_qubit_p')
-  parser.add_argument('--n_repeat',    default=1,         type=int,       help='circuit n_repeat, effecting embed depth')
+  parser.add_argument('--n_repeat',    default=2,         type=int,       help='circuit n_repeat, effecting embed depth')
   parser.add_argument('--embed_var',   default=0.2,       type=float,     help='embedding params init variance (normal)')
   parser.add_argument('--embed_norm',  default=1,         type=float,     help='embedding out value normalize, fatcor of pi (1 means [-pi, pi]); set 0 to disable')
   parser.add_argument('--SEC_rots',    default='RY,RZ',   help=f'choose multi from {gates_to_names(VALID_SEC_ROTS)}, comma seperate')
@@ -727,7 +729,7 @@ def get_parser():
   parser.add_argument('--CMC_rots',    default='RY,RZ',   help=f'choose multi from {gates_to_names(VALID_CMC_ROTS)}, comma seperate')
   # model (experimental)
   parser.add_argument('--init_H',     action='store_true', help='init the whole ansatz with H, this does NOT work')
-  parser.add_argument('--init_H_p',   action='store_true', help='init |p> with H, this seems NOT work')
+  parser.add_argument('--init_H_p',   action='store_true', help='init |p> with H, this should be a MUST!')
   parser.add_argument('--init_H_q',   action='store_true', help='init |q> with H, this does NOT work')
   parser.add_argument('--noise', default=1e-5, type=float, help='add noise on param')
   parser.add_argument('--part_meas',  action='store_true', help='PMeasure qubit by qubit, no joint measure')
@@ -756,8 +758,18 @@ def get_parser():
 def get_args(parser=None):
   parser = parser or get_parser()
   args = parser.parse_args()
-  
-  try_fix_randseed(args.seed)
+
+  args.init_H_p = True    # NOTE: fix this for more quick convergence (still slow though)
+
+  # fix randseed
+  seed = args.seed
+  if seed < 0:
+    random.seed(int(time()))
+    seed = random.randint(0, 2**15-1)
+  random.seed    (seed)
+  np.random.seed (seed)
+  set_random_seed(seed)
+  print(f'>> fix rand_seed to {seed} :)')
   
   if args.binary:
     print('>> binary mode: n_class=2, n_qubit_p=1')

@@ -32,7 +32,6 @@ if 'pyvqnet & pyqpanda':
   from pyvqnet.nn import Module
   from pyvqnet.qnn.quantumlayer import QuantumLayer
   from pyvqnet.utils.storage import load_parameters, save_parameters
-  from pyvqnet.utils import set_random_seed
 
 N_CLASS    = 4
 COULMNS    = ['label', 'text']
@@ -114,14 +113,6 @@ def timer(fn):
     print(f'[Timer]: {fn.__name__} took {end - start:.2f}s')
     return r
   return wrapper
-
-def try_fix_randseed(seed:int):
-  if seed < 0: return
-
-  print(f'>> fix rand_seed to {seed} :)')
-  random.seed    (seed)
-  np.random.seed (seed)
-  set_random_seed(seed)
 
 def json_load(fp:str):
   print(f'>> load hparam from {fp}')
