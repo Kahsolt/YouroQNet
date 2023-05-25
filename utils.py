@@ -42,6 +42,8 @@ TMP_PATH   = Path('tmp') ; TMP_PATH.mkdir(exist_ok=True)
 TASK_FILE  = 'task.json'
 MODEL_FILE = 'model.pth'
 PLOT_FILE  = 'loss_acc.png'
+MODEL_FILE_FMT = 'model-%s.pth'
+OPTIM_FILE_FMT = 'model-%s.pth'
 
 ANALYZERS = [
   'char',
@@ -59,34 +61,36 @@ GRAD_METH = {
 
 if 'typing':
   # quantum
-  QVM         = CPUQVM
-  QGate       = Callable[[Qubit, Any], QGateBase]
-  QModel      = QuantumLayer
-  QModelInit  = Tuple[Callable, Any, int, int]   # compute_circuit(), creteron_cls, n_qubit, n_param
-  Qubits      = Union[List[Qubit], QVec]
-  Cbit        = ClassicalCondition
-  Cbits       = List[Cbit]
-  Probs       = List[float]
+  QVM        = CPUQVM
+  QGate      = Callable[[Qubit, Any], QGateBase]
+  QModel     = QuantumLayer
+  QModelInit = Tuple[Callable, Any, int, int]   # compute_circuit(), creteron_cls, n_qubit, n_param
+  Qubits     = Union[List[Qubit], QVec]
+  Cbit       = ClassicalCondition
+  Cbits      = List[Cbit]
+  Probs      = List[float]
   # data
-  NDArray     = np.ndarray
-  Dataloader  = Generator[Tuple[NDArray, NDArray], None, None]
-  Dataset     = Tuple[List[str], NDArray]   # text, label
-  Datasets    = Tuple[Dataset, ...]
+  NDArray    = np.ndarray
+  Dataloader = Generator[Tuple[NDArray, NDArray], None, None]
+  Dataset    = Tuple[List[str], NDArray]   # text, label
+  Datasets   = Tuple[Dataset, ...]
   # train
-  LossesAccs  = Tuple[List[float], ...]
+  LossesAccs = Tuple[List[float], ...]
   # test
-  Score       = Tuple[float, float, float, NDArray]   # prec, recall, f1, cmat
-  Scores      = Tuple[List[float], List[float], List[float], List[NDArray]]   # multi splits
-  F1          = List[float]                 # [f1]
-  AccF1       = Tuple[float, F1]            # acc, [f1]
-  Metrics     = Tuple[float, float, F1]     # loss, acc, [f1]
+  Score      = Tuple[float, float, float, NDArray]   # prec, recall, f1, cmat
+  Scores     = Tuple[List[float], List[float], List[float], List[NDArray]]   # multi splits
+  F1         = List[float]                 # [f1]
+  AccF1      = Tuple[float, F1]            # acc, [f1]
+  Metrics    = Tuple[float, float, F1]     # loss, acc, [f1]
   # infer
-  Votes       = List[int]
-  Inferer     = Callable[[str], Votes]
+  Votes      = List[int]
+  Preds      = List[int]
+  Inferer    = Callable[[str], Votes]
 
 mean   = lambda x: sum(x) / len(x)
 mode   = lambda x: np.argmax(np.bincount(x))
-argmax = lambda x: x.argmax([-1], False)    # [axis], keepdims; only for QTensor
+argmax = lambda x: x.argmax([-1], False)    # [axis], keepdims; QTensor => QTensor
+to_pred = lambda probs: argmax(probs).to_numpy().astype(np.int32)   # QTensor => ndarray
 to_qtensor = lambda *xs: tuple(QTensor(x) for x in xs) if len(xs) > 1 else QTensor(xs[0])
 
 ''' utils '''

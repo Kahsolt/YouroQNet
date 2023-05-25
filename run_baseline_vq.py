@@ -256,9 +256,9 @@ def valid(args, model:Module, criterion, data_loader:Dataloader, logger:Logger) 
   
     logits = model(X)
     l = criterion(Y, logits)
-    pred = argmax(logits)
+    pred = to_pred(logits)
 
-    ok  += (Y_np == pred.to_numpy().astype(np.int32)).sum()
+    ok  += (Y_np == pred).sum()
     tot += len(Y_np) 
     loss += l.item()
   
@@ -283,8 +283,8 @@ def train(args, model:Module, optimizer, criterion, train_loader:Dataloader, tes
       l.backward()
       optimizer._step()
 
-      pred = argmax(logits)
-      ok  += (Y_np == pred.to_numpy().astype(np.int32)).sum()
+      pred = to_pred(logits)
+      ok  += (Y_np == pred).sum()
       tot += len(Y_np) 
       loss += l.item()
 

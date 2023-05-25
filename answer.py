@@ -19,14 +19,15 @@ def get_args_best_config():
   args = get_args()
   # preprocess
   args.analyzer   = 'kgram+'
-  args.min_freq   = 5
+  args.min_freq   = 10
   # model
-  args.model      = 'Youro'
-  args.n_len      = 16
+  args.model      = 'YouroQ'
+  args.n_len      = 8
+  args.n_repeat   = 2
   # train
   args.batch_size = 4
   args.epochs     = 10
-  args.lr         = 0.1
+  args.lr         = 0.01
   # infer
   args.n_vote     = 5
   return args
@@ -57,12 +58,7 @@ def question1(fp: str) -> np.ndarray:
   # inference
   args = get_args_best_config()
   pred = go_infer(args, T)
-
-  if 'dummy random':
-    pred = df[df.columns[0]].to_numpy()
-    return np.random.randint(0, 4, size=pred.shape)
-  else:
-    return np.asarray(pred, dtype=np.int32)
+  return np.asarray(pred, dtype=np.int32)
 
 
 if __name__ == '__main__':

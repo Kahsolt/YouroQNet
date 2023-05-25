@@ -175,20 +175,23 @@ def compute_circuit(cq:QCircuit, qv:Qubits, qvm:QVM, index:Union[list, int, slic
 
   return prob
 
-def prob_joint_to_marginal(args, x:QTensor) -> QTensor:
+def prob_project(args, x:QTensor) -> QTensor:
   ''' probability distribution projection '''
-  # for partial measure, return as is
-  if args.part_meas: return x
-  # for binary-clf, return as is
-  if args.binary: return x
-  # for mixed-net, return as is
+
+  # for mixed model, return as is
   if args.mnet: return x
+  # for not quantum onehot out, return as is
+  if not args.onehot: return x
 
   # for multi-clf, accumulate joint-distro to marginal-distro [B, D=16=2^4] => [B, D=4=NC]
   B, D = x.shape
   NC = int(np.log2(D))
-  return tensor.stack([x[:, 2**k] for k in range(NC)], axis=1)     # NOTE: this sometime not work
-  #return x[:, :NC]
+  if args.proj == 'part_meas':
+    return x
+  if args.proj == 'onehot':
+    return tensor.stack([x[:, 2**k] for k in range(NC)], axis=1)     # NOTE: this sometime not work
+  if args.proj == 'trunc':
+    return x[:, :NC]
 
 
 def get_YouroQNet(args) -> QModelInit:
@@ -196,8 +199,9 @@ def get_YouroQNet(args) -> QModelInit:
 
   if 'hparam':
     # qubits: |p> for context, |q> for data buffer
-    #n_qubit_p = int(np.ceil(np.log2(args.n_class)))      # FIXME: need at leaset `n_class - 1`` qubits
-    n_qubit_p = 1 if args.binary else args.n_class        # use single-qubit for binary clf
+    if   args.binary: n_qubit_p = 1                                     # use 1-qubit for binary clf
+    elif args.onehot: n_qubit_p = args.n_class                          # use nc-qubit for quantum onehot out
+    else:             n_qubit_p = int(np.ceil(np.log2(args.n_class)))   # use sqrt(nc)-qubit otherwise
     n_qubit_q = args.n_len
     n_qubit   = n_qubit_p + n_qubit_q
 
@@ -306,7 +310,7 @@ def get_YouroQNet(args) -> QModelInit:
           param_tht = param_frozen
         args.alt_cnt -= 1
         if args.alt_cnt <= 0:
-          args.alt_cnt = args.alt_step
+          args.alt_cnt = args.alt_step * args.batch_size
           args.alt_tgt = not args.alt_tgt
           param_frozen = param
     # param perturbation for stableness
@@ -320,11 +324,8 @@ def get_YouroQNet(args) -> QModelInit:
     psi   = param_psi[n_param_tht:]           # ansatz params
     # build & run circuit
     qc = build_circuit(theta, psi)
-    if args.part_meas:
-      if args.binary:
-        return compute_circuit(qc, qv, qvm, index=0)
-      else:
-        return [compute_circuit(qc, qv, qvm, index=idx)[0] for idx in range(n_qubit_p)]
+    if args.onehot and args.proj == 'part_meas':
+      return [compute_circuit(qc, qv, qvm, index=idx)[0] for idx in range(n_qubit_p)]
     else:
       return compute_circuit(qc, qv, qvm, index=slice(None, n_qubit_p))
 
@@ -466,7 +467,7 @@ def test(args, model:QModel, criterion, test_loader:Dataloader, logger:Logger) -
     X, Y = to_qtensor(X_np, Y_np)
   
     joint_probs = model(X)
-    probs = prob_joint_to_marginal(args, joint_probs)
+    probs = prob_project(args, joint_probs)
     l = criterion(Y, probs)
     pred = argmax(probs)
 
@@ -486,7 +487,9 @@ def test(args, model:QModel, criterion, test_loader:Dataloader, logger:Logger) -
   return loss / len(Y_true), acc, f1
 
 def train(args, model:QModel, optimizer, criterion, train_loader:Dataloader, test_loader:Dataloader, logger:Logger) -> LossesAccs:
+  out_dp = Path(args.out_dp)
   step = 0
+  best_f1 = -1
 
   losses, accs = [], []
   test_losses, test_accs, test_f1s = [], [], []
@@ -496,26 +499,25 @@ def train(args, model:QModel, optimizer, criterion, train_loader:Dataloader, tes
 
     model.train()
     for X_np, Y_np in train_loader():
+      Y_lbl = Y_np.argmax(-1)
       X, Y = to_qtensor(X_np, Y_np)
 
       optimizer.zero_grad()
       joint_probs = model(X)
-      probs = prob_joint_to_marginal(args, joint_probs)
+      probs = prob_project(args, joint_probs)
       l = criterion(Y, probs)
       l.backward()
       optimizer._step()
 
-      pred = argmax(probs)
+      pred = to_pred(probs)
 
       if args.debug_step:
-        if not any([args.part_meas, args.binary, args.mnet]):
-          print('joint_probs:', joint_probs)
+        if args.onehot: print('joint_probs:', joint_probs)
         print('probs:', probs)
-        #print('Y:', Y)
-        print('true:', Y_np.argmax(-1))
-        print('pred:', pred.to_numpy().astype(np.int32))
+        print('true:', Y_lbl)
+        print('pred:', pred)
 
-      ok  += (Y_np.argmax(-1) == pred.to_numpy().astype(np.int32)).sum()
+      ok  += (Y_lbl == pred).sum()
       tot += len(Y_np) 
       loss += l.item()
 
@@ -537,6 +539,14 @@ def train(args, model:QModel, optimizer, criterion, train_loader:Dataloader, tes
         test_f1s   .append(tf1)
         model.train()
 
+        new_f1 = mean(tf1)
+        if new_f1 > best_f1:
+          best_f1 = new_f1
+          save_ckpt(model, out_dp / (MODEL_FILE_FMT % 'best'))
+
+      if step % args.ckpt_interval == 0:
+        save_ckpt(model, out_dp / (MODEL_FILE_FMT % step))
+
   return losses, accs, test_losses, test_accs
 
 def infer(args, model:QModel, sent:str, tokenizer:Tokenizer, word2id:Vocab) -> Votes:
@@ -551,9 +561,9 @@ def infer(args, model:QModel, sent:str, tokenizer:Tokenizer, word2id:Vocab) -> V
 
   X = to_qtensor(X_np)    # [V, mL]
   joint_probs = model(X)  # [V, 2^NC]
-  probs = prob_joint_to_marginal(args, joint_probs)
-  pred = argmax(probs)    # [V]
-  votes = pred.to_numpy().astype(np.int32).tolist()
+  probs = prob_project(args, joint_probs)
+  pred = to_pred(probs)   # [V]
+  votes = pred.tolist()
   return votes
 
 
@@ -626,7 +636,7 @@ def go_train(args, user_vocab_data:Tuple[Vocab, Dataset, Dataset]=None, name_suf
   json_dump(result, out_dp / TASK_FILE)
 
 
-def go_infer(args, texts:List[str]=None, name_suffix:str='') -> Union[Votes, Inferer]:
+def go_infer(args, texts:List[str]=None, name_suffix:str='') -> Union[Preds, Inferer]:
   # configs
   out_dp: Path = LOG_PATH / args.analyzer / f'{args.model}{name_suffix}'
   model_fp = out_dp / MODEL_FILE
@@ -717,11 +727,12 @@ def get_parser():
   parser.add_argument('-L', '--analyzer', default='kgram+', choices=ANALYZERS, help='tokenize level')
   parser.add_argument('-P', '--pad',      default='\x00',       help='model input pad')
   parser.add_argument('--min_freq',       default=10, type=int, help='min_freq for final embedding vocab')
+  parser.add_argument('--limit',          default=-1, type=int, help='limit train data samples')
   # model
   parser.add_argument('-M', '--model', default='YouroQ',  choices=MODELS, help='model name')
   parser.add_argument('--n_len',       default=8,         type=int,       help='model input length (in tokens), aka. n_qubit_q')
-  parser.add_argument('--n_class',     default=N_CLASS,   type=int,       help='num of class, aka. n_qubit_p')
-  parser.add_argument('--n_repeat',    default=2,         type=int,       help='circuit n_repeat, effecting embed depth')
+  parser.add_argument('--n_class',     default=N_CLASS,   type=int,       help='num of class, related to n_qubit_p')
+  parser.add_argument('--n_repeat',    default=1,         type=int,       help='circuit n_repeat, effecting embed depth')
   parser.add_argument('--embed_var',   default=0.2,       type=float,     help='embedding params init variance (normal)')
   parser.add_argument('--embed_norm',  default=1,         type=float,     help='embedding out value normalize, fatcor of pi (1 means [-pi, pi]); set 0 to disable')
   parser.add_argument('--SEC_rots',    default='RY,RZ',   help=f'choose multi from {gates_to_names(VALID_SEC_ROTS)}, comma seperate')
@@ -732,7 +743,6 @@ def get_parser():
   parser.add_argument('--init_H_p',   action='store_true', help='init |p> with H, this should be a MUST!')
   parser.add_argument('--init_H_q',   action='store_true', help='init |q> with H, this does NOT work')
   parser.add_argument('--noise', default=1e-5, type=float, help='add noise on param')
-  parser.add_argument('--part_meas',  action='store_true', help='PMeasure qubit by qubit, no joint measure')
   parser.add_argument('--alt',        action='store_true', help='alternative freeze theta & psi')
   parser.add_argument('--alt_step',  default=10, type=int, help='alt step for --alt')
   # train
@@ -740,25 +750,31 @@ def get_parser():
   parser.add_argument('-G', '--grad_meth',  default='fd',   choices=GRAD_METH.keys(), help='grad method')
   parser.add_argument(      '--grad_dx',    default=0.01,   type=float, help='step size for finite_diff')
   parser.add_argument('--lr',               default=0.01,   type=float)
-  parser.add_argument('-E', '--epochs',     default=1,      type=int)
+  parser.add_argument('-E', '--epochs',     default=10,     type=int)
   parser.add_argument('-B', '--batch_size', default=4,      type=int)
   parser.add_argument('--slog_interval',    default=10,     type=int, help='log loss/acc')
   parser.add_argument('--log_interval',     default=50,     type=int, help='log & test & reset loss/acc')
+  parser.add_argument('--ckpt_interval',    default=200,    type=int, help='save ckpt')
   # infer
   parser.add_argument('--n_vote', default=5, type=int, help='max number of voters at inference time')
   # misc
   parser.add_argument('--seed',       default=RAND_SEED, type=int, help='rand seed')
   parser.add_argument('--inspect',    action='store_true',  help='run embed inspect only')
   parser.add_argument('--debug_step', action='store_true',  help='debug output of each training step')
-  parser.add_argument('--binary',     action='store_true',  help='force binary clf mode, override --n_class and read from --tgt_cls')
-  parser.add_argument('--tgt_cls',    default=0,  type=int, help='relabel the tgt_cls as 1, otherwise 0')
-  parser.add_argument('--limit',      default=-1, type=int, help='limit train data samples')
+  parser.add_argument('--binary',     action='store_true',  help='force binary clf mode, override --n_class')
+  parser.add_argument('--tgt_cls',    default=0,  type=int, help='relabel the tgt_cls as 1, otherwise 0; work with --binary')
+  parser.add_argument('--onehot',     action='store_true',  help='force quantum onehot output, override --n_qubit_p')
+  parser.add_argument('--proj',       default='onehot',  choices=['part_meas', 'onehot', 'trunc'], help='prob project method, work with --onehot')
   return parser
 
 def get_args(parser=None):
   parser = parser or get_parser()
   args = parser.parse_args()
 
+  # sanity check
+  assert not all([args.binary, args.onehot]), '--binary conflicts with --onehot'
+
+  # fix musts
   args.init_H_p = True    # NOTE: fix this for more quick convergence (still slow though)
 
   # fix randseed
@@ -769,16 +785,18 @@ def get_args(parser=None):
   random.seed    (seed)
   np.random.seed (seed)
   set_random_seed(seed)
+  args.seed = get_random_seed()
   print(f'>> fix rand_seed to {seed} :)')
   
+  # overrides & inits
   if args.binary:
     print('>> binary mode: n_class=2, n_qubit_p=1')
     args.n_class = 2
   
   if args.alt:
     print('>> alternative training tht & psi')
-    args.alt_cnt = args.alt_step
-    args.alt_tgt = False     # NOTE: True for freeze psi
+    args.alt_cnt = args.alt_step * args.batch_size
+    args.alt_tgt = True     # NOTE: True for freeze psi
 
   return args
 

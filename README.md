@@ -22,7 +22,7 @@ And, code repo for the qualifying stage is here: [第二届“司南杯”初赛
 
 ⚪ for contest problem (👈 **Follow this to reproduce our contest results!!**)
 
-- `python answer.py` for preprocess & train
+- `python answer.py` for preprocess & train (⚠ VERY VERY SLOW!!)
 - `python check.py` for evaluate
 
 ⚪ for quick peek of YouroQNet components
@@ -50,6 +50,7 @@ And, code repo for the qualifying stage is here: [第二届“司南杯”初赛
 
 - adaptive k-gram tokenizer (see [mk_vocab.py](mk_vocab.py), interactivate demo [vis_tokenizer.py](vis_tokenizer.py))
 - YouroQNet for text clf (see [run_quantum.py](run_quantum.py), interactivate demo [vis_youroqnet.py](vis_youroqnet.py))
+- theoretical analysis of why & how QNN works (see [vis_qc_apriori.py](vis_qc_apriori.py))
 
 ℹ See our PPT [YouroQNet.pdf](ref/YouroQNet.pdf) for more conceptual understanding 🎉
 
