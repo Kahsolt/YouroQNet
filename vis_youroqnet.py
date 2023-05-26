@@ -5,6 +5,8 @@
 from pathlib import Path
 from traceback import print_exc
 
+import numpy as np
+
 BASE_PATH = Path(__file__).parent
 import sys ; sys.path.append(str(BASE_PATH))
 from run_quantum import get_parser, get_args, go_infer, mode, Inferer
@@ -24,12 +26,15 @@ def run_infer_dataset(args):
   for split in SPLITS:
     T, Y = load_dataset(split)
     preds = go_infer(args, T)
+    preds = np.asarray(preds, dtype=np.int32)
     acc, f1s = get_acc_f1(preds, Y)
+    f1_avg = mean(f1s)
 
     print(f'[{split}]')
     print(f'  acc:', acc)
     print(f'  f1:', f1s)
-    print(f'  f1_avg:', mean(f1s))
+    print(f'  f1_avg:', f1_avg)
+    print(f'  score:', f1_avg * 60)
 
 
 def run_infer_interactive(args):

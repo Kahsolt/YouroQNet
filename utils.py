@@ -265,7 +265,7 @@ def f1_score(result:NDArray, target:NDArray, label:int) -> float:
   return np.round(2 * (p * f) / (p + f), 3) if (p + f) > 0 else 0.0
 
 def get_acc_f1(pred:NDArray, target:NDArray, n_class:int=N_CLASS) -> AccF1:
-  assert pred.dtype == target.dtype == np.int32, 'label should be inetegers'
+  assert pred.dtype == target.dtype == np.int32, 'label should be integers'
   return (pred == target).mean(), [f1_score(pred, target, label) for label in range(n_class)]
 
 ''' plot '''

@@ -22,11 +22,12 @@ def get_args_best_config():
   args.min_freq   = 10
   # model
   args.model      = 'YouroQ'
+  args.onehot     = True
   args.n_len      = 8
-  args.n_repeat   = 2
+  args.n_repeat   = 4
   # train
   args.batch_size = 4
-  args.epochs     = 10
+  args.epochs     = 4
   args.lr         = 0.01
   # infer
   args.n_vote     = 5

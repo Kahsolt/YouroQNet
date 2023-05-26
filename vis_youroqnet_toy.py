@@ -107,6 +107,7 @@ if __name__ == '__main__':
   if '3-clf test':
     if args.tri:
       args.binary    = False
+      args.onehot    = True
       args.n_class   = 3
       args.SEC_rots  = 'RY,RZ'
       args.SEC_entgl = 'CNOT'

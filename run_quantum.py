@@ -648,14 +648,14 @@ def go_infer(args, texts:List[str]=None, name_suffix:str='') -> Union[Preds, Inf
   # hparam load
   hparam = json_load(out_dp / TASK_FILE)['hparam']
   for k, v in hparam.items():
-    if not hasattr(args, k):
-      setattr(args, k, v)
-  
+    setattr(args, k, v)
+  args.seed = hparam['seed']
+
   # fix seed again
   random.seed    (args.seed)
   np.random.seed (args.seed)
   set_random_seed(args.seed)
-  print(f'>> fix rand_seed to {args.seed} :)')
+  print(f'>> refix rand_seed to {args.seed} :)')
 
   # ignore training settings
   global export_circuit
@@ -677,18 +677,7 @@ def go_infer(args, texts:List[str]=None, name_suffix:str='') -> Union[Preds, Inf
     return lambda sent: infer(args, model, sent, tokenizer, word2id)
 
   # predict directly if text is given
-  preds = []
-  n_ties = 0
-  for sent in texts:
-    votes = infer(args, model, sent, tokenizer, word2id)
-    final = mode(votes)
-    if votes.count(final) > 1:
-      print(f'warn: meets a tie {votes}')
-      n_ties += 1
-    preds.append(final)
-  if n_ties: print(f'n_ties: {n_ties}')
-  
-  return preds
+  return [mode(infer(args, model, sent, tokenizer, word2id)) for sent in texts]
 
 
 def go_inspect(args, name_suffix:str='', words:List[str]=None):
@@ -745,9 +734,9 @@ def get_parser():
   parser.add_argument('--embed_avg',   default=0.0,       type=float,     help='embedding params normal init mean')
   parser.add_argument('--embed_var',   default=0.2,       type=float,     help='embedding params normal init variance')
   parser.add_argument('--embed_norm',  default=1,         type=float,     help='embedding out value normalize, fatcor of pi (1 means [-pi, pi]); set 0 to disable')
-  parser.add_argument('--SEC_rots',    default='RY,RZ',   help=f'choose multi from {gates_to_names(VALID_SEC_ROTS)}, comma seperate')
+  parser.add_argument('--SEC_rots',    default='RY',      help=f'choose multi from {gates_to_names(VALID_SEC_ROTS)}, comma seperate')
   parser.add_argument('--SEC_entgl',   default='CNOT',    help=f'choose one from {gates_to_names(VALID_SEC_ENTGL)}')
-  parser.add_argument('--CMC_rots',    default='RY,RZ',   help=f'choose multi from {gates_to_names(VALID_CMC_ROTS)}, comma seperate')
+  parser.add_argument('--CMC_rots',    default='RY',      help=f'choose multi from {gates_to_names(VALID_CMC_ROTS)}, comma seperate')
   # model (experimental)
   parser.add_argument('--init_H',     action='store_true', help='init the whole ansatz with H, this does NOT work')
   parser.add_argument('--init_H_p',   action='store_true', help='init |p> with H, this should be a MUST!')
