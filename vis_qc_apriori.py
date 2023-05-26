@@ -5,14 +5,16 @@
 from argparse import ArgumentParser
 from functools import reduce
 
-from sympy import simplify
-from sympy import symbols as S
+import sympy as sp
+from sympy import symbols, simplify, expand
 from sympy import sin, cos, pi, E as e, I as i
 import numpy as np
 
 # vqc in a apriori / mathematical / logical / computaional architecture view
 
 if 'Tiny-Q style gates, but symbolic':
+  # https://en.wikipedia.org/wiki/List_of_quantum_logic_gates#Rotation_operator_gates
+  S = lambda x: symbols(x, real=True)   # raw inputs are assumed real
   RX = lambda x: np.asarray([
     [cos(S(x)/2), -i*sin(S(x)/2)],
     [-i*sin(S(x)/2), cos(S(x)/2)],
@@ -47,6 +49,10 @@ if 'Tiny-Q style gates, but symbolic':
     [1, 0],
     [0, 1],
   ])
+  H = np.asarray([
+    [1,  1],
+    [1, -1],
+  ]) / np.sqrt(2)
 
   Gate = np.ndarray
   compose = lambda *args: reduce(np.kron, args[1:], args[0])
@@ -85,7 +91,7 @@ if 'Tiny-Q style gates, but symbolic':
   ])
 
 
-def run_circuit(qc:Gate):
+def run_circuit(qc:Gate, calc_pp=True):
   # can be very very slow, can not estimate run time!!
   #qc = gate_simplify(qc)
 
@@ -101,14 +107,23 @@ def run_circuit(qc:Gate):
   print('p.shape:', p.shape)
 
   # slow, but we need the output!!
-  print('>> simplifying p[k], this will take long ...')
+  print('>> simplifying coeffs of p[k], this will take long ...')
   for i in range(nc):
-    print(f'|{bin(i)[2:].rjust(nq, "0")}>:')
-    print(simplify(p[i]))
+    p[i] = simplify(p[i])
+    print(f'|{bin(i)[2:].rjust(nq, "0")}>:', p[i])
+
+  if calc_pp:
+    print('>> simplifying probs of p[k], this will take long ...')
+    pp = np.empty_like(p)
+    for i in range(nc):
+      pp[i] = simplify(sp.Abs(p[i])**2)
+      print(f'|{bin(i)[2:].rjust(nq, "0")}>:', pp[i])
 
   # write to global env
-  globals()['qc'] = qc
-  globals()['p']  = p
+  globals()['qc']  = qc
+  globals()['p']   = p
+  if calc_pp:
+    globals()['pp']  = pp
 
 
 def go_single_qubit_encoder():
@@ -122,26 +137,33 @@ def go_single_qubit_encoder():
   # q_0: |0>─┤RX(tht0)├─┤RY(tht1)├─┤RZ(tht2)├─
   #          └────────┘ └────────┘ └────────┘ 
 
-  def build_circuit(RX, RY, RZ):
+  def build_circuit(RX:Gate, RY:Gate, RZ:Gate) -> Gate:
     c0 = RX('θ_0')
     c1 = RY('θ_1')
     c2 = RZ('θ_2')
     qc = c2 @ c1 @ c0
     return qc
   
-  # run the accurate circuit
+  # run the circuit
   run_circuit(build_circuit(RX, RY, RZ))
 
-  # prob on:
-  # |0>: exp( im(θ_2)/2) * Abs(I*sin(θ_0/2)*sin(θ_1/2) + cos(θ_0/2)*cos(θ_1/2))
-  # |1>: exp(-im(θ_2)/2) * Abs(I*sin(θ_0/2)*cos(θ_1/2) - sin(θ_1/2)*cos(θ_0/2))
+  # coeffs on:
+  # |0>: ( I*sin(θ_0/2)*sin(θ_1/2) + cos(θ_0/2)*cos(θ_1/2))*exp(-I*θ_2/2)
+  # |1>: (-I*sin(θ_0/2)*cos(θ_1/2) + sin(θ_1/2)*cos(θ_0/2))*exp( I*θ_2/2)
+  # probs on:
+  # |0>:  0.5*cos(θ_0)*cos(θ_1) + 0.5
+  # |1>: -0.5*cos(θ_0)*cos(θ_1) + 0.5
 
-  # run the approx circuit
-  run_circuit(build_circuit(RX_approx, RY_approx, RZ_approx))
+  # approx circuit
+  p0 =  0.5*cos_hat(S('x')) * cos_hat(S('y')) + 0.5
+  p1 = -0.5*cos_hat(S('x')) * cos_hat(S('y')) + 0.5
+  print('approximated:')
+  print('p0:', expand(simplify(p0)))
+  print('p1:', expand(simplify(p1)))
 
-  # prob on:
-  # |0>: (-1.44*I*pi**2*θ_0*θ_1 - (θ_0**2 - pi**2)*(θ_1**2 - pi**2))*(θ_2**2 + 1.2*I*pi*θ_2 - pi**2)/pi**6
-  # |1>: 1.2*(I*θ_0*(θ_1**2 - pi**2) - θ_1*(θ_0**2 - pi**2))*(-θ_2**2 + 1.2*I*pi*θ_2 + pi**2)/pi**5
+  # probs on:
+  # |0>: + 8*x^2*y^2/pi^4 - 2*x^2/pi^2 - 2*y^2/pi^2 + 1
+  # |1>: - 8*x^2*y^2/pi^4 + 2*x^2/pi^2 + 2*y^2/pi^2
 
 
 def go_YouroQNet_toy():
@@ -152,7 +174,7 @@ def go_YouroQNet_toy():
   #  - entangle with CNOT / CRY
   # circuit:     c0       c1     c2     c3      c4         c5         c6         c7         c8         c9         c10
   #          ┌────────┐                                                       ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐
-  # q_0: |0>─┤RY(psi0)├ ────── ────── ────── ────■───── ────■───── ────■───── ┤RY(psi4)├ ┤RY(psi5)├ ┤RY(psi6)├ ┤RY(psi7)├
+  # q_0: |+>─┤RY(psi0)├ ────── ────── ────── ────■───── ────■───── ────■───── ┤RY(psi4)├ ┤RY(psi5)├ ┤RY(psi6)├ ┤RY(psi7)├
   #          ├────────┤               ┌────┐ ┌───┴────┐     │          │      └────────┘ └────┬───┘ └───┬────┘ └───┬────┘
   # q_1: |0>─┤RY(tht0)├ ───■── ────── ┤CNOT├ ┤RY(psi1)├ ────┼───── ────┼───── ────────── ─────■──── ────┼───── ────┼─────
   #          ├────────┤ ┌──┴─┐        └──┬─┘ └────────┘ ┌───┴────┐     │                                │          │
@@ -161,7 +183,7 @@ def go_YouroQNet_toy():
   # q_3: |0>─┤RY(tht2)├ ────── ┤CNOT├ ───■── ────────── ────────── ┤RY(psi3)├ ────────── ────────── ────────── ────■─────
   #          └────────┘        └────┘                              └────────┘                
 
-  def build_circuit(RY:Gate, CRY:Gate):
+  def build_circuit(RY:Gate, CRY:Gate) -> Gate:
     # circuit axiliary
     I2 = get_I(2)
     I3 = get_I(3)
@@ -183,218 +205,48 @@ def go_YouroQNet_toy():
     c10 = (swap23 @ swap12 @ swap01) @ compose(CRY('ψ_7'), I2) @ (swap01 @ swap12 @ swap23)
 
     # circuit (chaining up all gates)
-    qc = c10 @ c9 @ c8 @ c7 @ c6 @ c5 @ c4 @ c3 @ c2 @ c1 @ c0
+    qc = c10 @ c9 @ c8 @ c7 @ c6 @ c5 @ c4 @ c3 @ c2 @ c1 @ c0 @ compose(H, I3)
     return qc
 
   # run the accurate circuit
-  run_circuit(build_circuit(RY, CRY))
+  #run_circuit(build_circuit(RY, CRY), calc_pp=False)
 
   # coeff α on component α|0000> (eqv. matrix cell of qc[0, 0]):
-  # + sin(θ_0/2)*sin(θ_1/2)*sin(θ_2/2)*sin(ψ_0/2)*sin(ψ_3/2)*sin(ψ_4/2)*cos(ψ_1/2+ψ_2/2)
-  # + sin(θ_0/2)*sin(θ_1/2)*sin(ψ_0/2)*sin(ψ_4/2)*sin(ψ_1/2+ψ_2/2)*cos(θ_2/2)*cos(ψ_3/2)
-  # - sin(θ_2/2)*sin(ψ_0/2)*sin(ψ_3/2)*sin(ψ_4/2)*sin(ψ_1/2+ψ_2/2)*cos(θ_0/2)*cos(θ_1/2)
-  # - sin(ψ_0/2)*sin(ψ_4/2)*cos(θ_0/2)*cos(θ_1/2)*cos(θ_2/2)*cos(ψ_3/2)*cos(ψ_1/2+ψ_2/2)
-  # + cos(θ_0/2)*cos(θ_1/2)*cos(θ_2/2)*cos(ψ_0/2)*cos(ψ_4/2)
+  # - sin(θ_0/2)*sin(θ_1/2)*sin(θ_2/2) * sin(ψ_0/2 + pi/4) * cos(ψ_1/2 + ψ_2/2)*cos(ψ_3/2) * sin(ψ_4/2)
+  # + sin(θ_0/2)*sin(θ_1/2)*cos(θ_2/2) * sin(ψ_0/2 + pi/4) * sin(ψ_1/2 + ψ_2/2)*sin(ψ_3/2) * sin(ψ_4/2)
+  # + cos(θ_0/2)*cos(θ_1/2)*sin(θ_2/2) * sin(ψ_0/2 + pi/4) * sin(ψ_1/2 + ψ_2/2)*cos(ψ_3/2) * sin(ψ_4/2) 
+  # - cos(θ_0/2)*cos(θ_1/2)*cos(θ_2/2) * sin(ψ_0/2 + pi/4) * cos(ψ_1/2 + ψ_2/2)*sin(ψ_3/2) * sin(ψ_4/2)
+  # + sin(θ_0/2)*sin(θ_1/2)*sin(θ_2/2) * cos(ψ_0/2 + pi/4)                                 * cos(ψ_4/2)
 
   # Hence when param values are restricted in range [-pi, pi], the actual value range for the inner `sin()/cos()` will be [-pi/2, pi/2]
-  # Let's eliminate all `/2`, reorder & group it (=> see also full results in `img/vis_qc_logic.txt`)
-
-  #        theta (embed)                         psi (ansatz)
-  # + sin(θ_0)*sin(θ_1)*sin(θ_2) * sin(ψ_0) * cos(ψ_1+ψ_2)*sin(ψ_3) * sin(ψ_4)
-  # + sin(θ_0)*sin(θ_1)*cos(θ_2) * sin(ψ_0) * sin(ψ_1+ψ_2)*cos(ψ_3) * sin(ψ_4)
-  # - cos(θ_0)*cos(θ_1)*sin(θ_2) * sin(ψ_0) * sin(ψ_1+ψ_2)*sin(ψ_3) * sin(ψ_4)
-  # - cos(θ_0)*cos(θ_1)*cos(θ_2) * sin(ψ_0) * cos(ψ_1+ψ_2)*cos(ψ_3) * sin(ψ_4)
-  # + cos(θ_0)*cos(θ_1)*cos(θ_2) * cos(ψ_0) *                         cos(ψ_4)
-
-  # run the approx circuit
-  run_circuit(build_circuit(RY_approx, CRY_approx))
-
-  # Within this range [-pi/2, pi/2], function `sin()/cos()` is semi-linear :), you can draw plots here: https://www.desmos.com/calculator)
+  # Within this range, function `sin()/cos()` is semi-linear :), you can draw plots here: https://www.desmos.com/calculator)
   # We try to approximate it just by linear & quadra:
   #   sin(x) -> k/π * x, where k ~= 2.4
   #   cos(x) -> 1 - (2/π * x)^2
   # Then this long-long p[0] will become a multi-variable polynomial :)
 
-  # ( - 2.1*pi^4 *  θ_0        * θ_1        * θ_2                                         *  ψ_0        * ψ_4         * (2.1*pi^2*ψ_1*ψ_2-1.4*(ψ_1^2-pi^2)*(ψ_2^2-pi^2)) *  ψ_3
-  #   -     pi^4 * (θ_0^2-pi^2)*(θ_1^2-pi^2)*(θ_2^2-pi^2)                                 * (ψ_0^2-pi^2)*(ψ_4^2-pi^2)
-  #   + 1.2      * (θ_0^2-pi^2)*(θ_1^2-pi^2)*(θ_2^2-pi^2)                                 *  ψ_0        * ψ_4         * (1.7*pi^2*ψ_1*ψ_2-1.2*(ψ_1^2-pi^2)*(ψ_2^2-pi^2)) * (ψ_3^2-pi^2)
-  #   + 2.5*pi^3 * (-θ_0*θ_1*(θ_2^2-pi^2)*(ψ_3^2-pi^2)+θ_2*ψ_3*(θ_0^2-pi^2)*(θ_1^2-pi^2)) *  ψ_0        * ψ_4         * (ψ_1*(ψ_2^2-pi^2)+(ψ_1^2-pi^2)*ψ_2)
-  # ) / pi^14
+  # run the approx circuit
+  run_circuit(build_circuit(RY_approx, CRY_approx))
 
-  # Even further collapse all multiplier constants to get the functional form:
+  # (
+  # -0.85*pi**6 *  ψ_0      *(ψ_4**2-C) * (θ_0**2-C)*(θ_1**2-C)*(θ_2**2-C)
+  # -0.71*pi**5 * (ψ_0**2-C)*(ψ_4**2-C) * (θ_0**2-C)*(θ_1**2-C)*(θ_2**2-C)
+  # -2.21*pi**5 *  ψ_0      * ψ_4       *  θ_0        * θ_1        * θ_2         * ψ_3      *(1.44*C*ψ_1*ψ_2-(ψ_1**2-C)*(ψ_2**2-C))
+  # +1.76*pi**4 * (ψ_0**2-C)* ψ_4       *  θ_0        * θ_1        * θ_2         * ψ_3      *(1.44*C*ψ_1*ψ_2-(ψ_1**2-C)*(ψ_2**2-C))
+  # -1.76*pi**4 *  ψ_0      * ψ_4       * (θ_0*θ_1*(θ_2**2-C)*(ψ_3**2-C)-θ_2*ψ_3*(θ_0**2-C)*(θ_1**2-C)) * (ψ_1*(ψ_2**2-C) + ψ_2*(ψ_1**2-C)) 
+  # +1.47*pi**3 * (ψ_0**2-C)* ψ_4       * (θ_0*θ_1*(θ_2**2-C)*(ψ_3**2-C)-θ_2*ψ_3*(θ_0**2-C)*(θ_1**2-C)) * (ψ_1*(ψ_2**2-C) + ψ_2*(ψ_1**2-C))
+  # +1.02*pi    *  ψ_0      * ψ_4       * (θ_0**2-C)*(θ_1**2-C)*(θ_2**2-C)       *(ψ_3**2-C)*(1.44*C*ψ_1*ψ_2-(ψ_1**2-C)*(ψ_2**2-C)) 
+  # -0.85       * (ψ_0**2-C)* ψ_4       * (θ_0**2-C)*(θ_1**2-C)*(θ_2**2-C)       *(ψ_3**2-C)*(1.44*C*ψ_1*ψ_2-(ψ_1**2-C)*(ψ_2**2-C)) 
+  # )/pi**15, where C = pi**2
 
-  '''
-  [c**6]
-  - ψ_0*ψ_4                 # the gloabl ansatz bias (AB)
-
-  [c**5]
-  + θ_0**2*ψ_0*ψ_4          # single input theta tweeks AB
-  + θ_1**2*ψ_0*ψ_4 
-  + θ_2**2*ψ_0*ψ_4 
-  + ψ_0*ψ_1**2*ψ_4          # single ansatz psi tweeks AB
-  + ψ_0*ψ_2**2*ψ_4 
-  + ψ_0*ψ_3**2*ψ_4 
-  + 1                       # the gloabl systematic bias (SB)
-
-  [c**4]
-  - θ_0**2*θ_1**2*ψ_0*ψ_4   # interactions of input thetas tweeks AB
-  - θ_0**2*θ_2**2*ψ_0*ψ_4 
-  - θ_0**2*ψ_0*ψ_1**2*ψ_4   # interactions of ansatz psis tweeks AB
-  - θ_0**2*ψ_0*ψ_2**2*ψ_4 
-  - θ_0**2*ψ_0*ψ_3**2*ψ_4 
-  - θ_0**2                  # single input theta tweeks SB
-  - θ_1**2*θ_2**2*ψ_0*ψ_4 
-  - θ_1**2*ψ_0*ψ_1**2*ψ_4 
-  - θ_1**2*ψ_0*ψ_2**2*ψ_4 
-  - θ_1**2*ψ_0*ψ_3**2*ψ_4 
-  - θ_1**2 
-  - θ_2**2*ψ_0*ψ_1**2*ψ_4 
-  - θ_2**2*ψ_0*ψ_2**2*ψ_4 
-  - θ_2**2*ψ_0*ψ_3**2*ψ_4 
-  - θ_2**2 
-  - ψ_0**2                  # single ansatz psi tweeks SB
-  - ψ_0*ψ_1**2*ψ_2**2*ψ_4 
-  - ψ_0*ψ_1**2*ψ_3**2*ψ_4 
-  + ψ_0*ψ_1*ψ_2*ψ_4 
-  - ψ_0*ψ_2**2*ψ_3**2*ψ_4 
-  - ψ_4**2 
-
-  [c**3]
-  + θ_0**2*θ_1**2*θ_2**2*ψ_0*ψ_4
-  + θ_0**2*θ_1**2*ψ_0*ψ_1**2*ψ_4 
-  + θ_0**2*θ_1**2*ψ_0*ψ_2**2*ψ_4 
-  + θ_0**2*θ_1**2*ψ_0*ψ_3**2*ψ_4 
-  + θ_0**2*θ_1**2                   # interactions of input thetas tweeks SB
-  + θ_0**2*θ_2**2*ψ_0*ψ_1**2*ψ_4 
-  + θ_0**2*θ_2**2*ψ_0*ψ_2**2*ψ_4 
-  + θ_0**2*θ_2**2*ψ_0*ψ_3**2*ψ_4 
-  + θ_0**2*θ_2**2 
-  + θ_0**2*ψ_0**2 
-  + θ_0**2*ψ_0*ψ_1**2*ψ_2**2*ψ_4 
-  + θ_0**2*ψ_0*ψ_1**2*ψ_3**2*ψ_4 
-  - θ_0**2*ψ_0*ψ_1*ψ_2*ψ_4 
-  + θ_0**2*ψ_0*ψ_2**2*ψ_3**2*ψ_4 
-  + θ_0**2*ψ_4**2 
-  + θ_0*θ_1*ψ_0*ψ_1*ψ_4 
-  + θ_0*θ_1*ψ_0*ψ_2*ψ_4 
-  + θ_1**2*θ_2**2*ψ_0*ψ_1**2*ψ_4 
-  + θ_1**2*θ_2**2*ψ_0*ψ_2**2*ψ_4 
-  + θ_1**2*θ_2**2*ψ_0*ψ_3**2*ψ_4 
-  + θ_1**2*θ_2**2 
-  + θ_1**2*ψ_0**2 
-  + θ_1**2*ψ_0*ψ_1**2*ψ_2**2*ψ_4 
-  + θ_1**2*ψ_0*ψ_1**2*ψ_3**2*ψ_4 
-  - θ_1**2*ψ_0*ψ_1*ψ_2*ψ_4 
-  + θ_1**2*ψ_0*ψ_2**2*ψ_3**2*ψ_4 
-  + θ_1**2*ψ_4**2 
-  + θ_2**2*ψ_0**2 
-  + θ_2**2*ψ_0*ψ_1**2*ψ_2**2*ψ_4 
-  + θ_2**2*ψ_0*ψ_1**2*ψ_3**2*ψ_4 
-  - θ_2**2*ψ_0*ψ_1*ψ_2*ψ_4 
-  + θ_2**2*ψ_0*ψ_2**2*ψ_3**2*ψ_4 
-  + θ_2**2*ψ_4**2 
-  - θ_2*ψ_0*ψ_1*ψ_3*ψ_4 
-  - θ_2*ψ_0*ψ_2*ψ_3*ψ_4 
-  + ψ_0**2*ψ_4**2                 # interactions of ansatz psis tweeks SB
-  + ψ_0*ψ_1**2*ψ_2**2*ψ_3**2*ψ_4 
-  - ψ_0*ψ_1*ψ_2*ψ_3**2*ψ_4 
-
-  [c**2]
-  - θ_0**2*θ_1**2*θ_2**2*ψ_0*ψ_1**2*ψ_4 
-  - θ_0**2*θ_1**2*θ_2**2*ψ_0*ψ_2**2*ψ_4 
-  - θ_0**2*θ_1**2*θ_2**2*ψ_0*ψ_3**2*ψ_4 
-  - θ_0**2*θ_1**2*θ_2**2 
-  - θ_0**2*θ_1**2*ψ_0**2 
-  - θ_0**2*θ_1**2*ψ_0*ψ_1**2*ψ_2**2*ψ_4 
-  - θ_0**2*θ_1**2*ψ_0*ψ_1**2*ψ_3**2*ψ_4 
-  + θ_0**2*θ_1**2*ψ_0*ψ_1*ψ_2*ψ_4 
-  - θ_0**2*θ_1**2*ψ_0*ψ_2**2*ψ_3**2*ψ_4 
-  - θ_0**2*θ_1**2*ψ_4**2 
-  - θ_0**2*θ_2**2*ψ_0**2 
-  - θ_0**2*θ_2**2*ψ_0*ψ_1**2*ψ_2**2*ψ_4 
-  - θ_0**2*θ_2**2*ψ_0*ψ_1**2*ψ_3**2*ψ_4 
-  + θ_0**2*θ_2**2*ψ_0*ψ_1*ψ_2*ψ_4 
-  - θ_0**2*θ_2**2*ψ_0*ψ_2**2*ψ_3**2*ψ_4 
-  - θ_0**2*θ_2**2*ψ_4**2 
-  + θ_0**2*θ_2*ψ_0*ψ_1*ψ_3*ψ_4 
-  + θ_0**2*θ_2*ψ_0*ψ_2*ψ_3*ψ_4 
-  - θ_0**2*ψ_0**2*ψ_4**2 
-  - θ_0**2*ψ_0*ψ_1**2*ψ_2**2*ψ_3**2*ψ_4 
-  + θ_0**2*ψ_0*ψ_1*ψ_2*ψ_3**2*ψ_4 
-  - θ_0*θ_1*θ_2**2*ψ_0*ψ_1*ψ_4 
-  - θ_0*θ_1*θ_2**2*ψ_0*ψ_2*ψ_4 
-  + θ_0*θ_1*θ_2*ψ_0*ψ_3*ψ_4 
-  - θ_0*θ_1*ψ_0*ψ_1**2*ψ_2*ψ_4 
-  - θ_0*θ_1*ψ_0*ψ_1*ψ_2**2*ψ_4 
-  - θ_0*θ_1*ψ_0*ψ_1*ψ_3**2*ψ_4 
-  - θ_0*θ_1*ψ_0*ψ_2*ψ_3**2*ψ_4 
-  - θ_1**2*θ_2**2*ψ_0**2 
-  - θ_1**2*θ_2**2*ψ_0*ψ_1**2*ψ_2**2*ψ_4 
-  - θ_1**2*θ_2**2*ψ_0*ψ_1**2*ψ_3**2*ψ_4 
-  + θ_1**2*θ_2**2*ψ_0*ψ_1*ψ_2*ψ_4 
-  - θ_1**2*θ_2**2*ψ_0*ψ_2**2*ψ_3**2*ψ_4 
-  - θ_1**2*θ_2**2*ψ_4**2 
-  + θ_1**2*θ_2*ψ_0*ψ_1*ψ_3*ψ_4 
-  + θ_1**2*θ_2*ψ_0*ψ_2*ψ_3*ψ_4 
-  - θ_1**2*ψ_0**2*ψ_4**2 
-  - θ_1**2*ψ_0*ψ_1**2*ψ_2**2*ψ_3**2*ψ_4 
-  + θ_1**2*ψ_0*ψ_1*ψ_2*ψ_3**2*ψ_4 
-  - θ_2**2*ψ_0**2*ψ_4**2 
-  - θ_2**2*ψ_0*ψ_1**2*ψ_2**2*ψ_3**2*ψ_4 
-  + θ_2**2*ψ_0*ψ_1*ψ_2*ψ_3**2*ψ_4 
-  + θ_2*ψ_0*ψ_1**2*ψ_2*ψ_3*ψ_4 
-  + θ_2*ψ_0*ψ_1*ψ_2**2*ψ_3*ψ_4 
-
-  [c]
-  + θ_0**2*θ_1**2*θ_2**2*ψ_0**2 
-  + θ_0**2*θ_1**2*θ_2**2*ψ_0*ψ_1**2*ψ_2**2*ψ_4 
-  + θ_0**2*θ_1**2*θ_2**2*ψ_0*ψ_1**2*ψ_3**2*ψ_4 
-  - θ_0**2*θ_1**2*θ_2**2*ψ_0*ψ_1*ψ_2*ψ_4 
-  + θ_0**2*θ_1**2*θ_2**2*ψ_0*ψ_2**2*ψ_3**2*ψ_4 
-  + θ_0**2*θ_1**2*θ_2**2*ψ_4**2 
-  - θ_0**2*θ_1**2*θ_2*ψ_0*ψ_1*ψ_3*ψ_4 
-  - θ_0**2*θ_1**2*θ_2*ψ_0*ψ_2*ψ_3*ψ_4 
-  + θ_0**2*θ_1**2*ψ_0**2*ψ_4**2 
-  + θ_0**2*θ_1**2*ψ_0*ψ_1**2*ψ_2**2*ψ_3**2*ψ_4 
-  - θ_0**2*θ_1**2*ψ_0*ψ_1*ψ_2*ψ_3**2*ψ_4 
-  + θ_0**2*θ_2**2*ψ_0**2*ψ_4**2 
-  + θ_0**2*θ_2**2*ψ_0*ψ_1**2*ψ_2**2*ψ_3**2*ψ_4 
-  - θ_0**2*θ_2**2*ψ_0*ψ_1*ψ_2*ψ_3**2*ψ_4 
-  - θ_0**2*θ_2*ψ_0*ψ_1**2*ψ_2*ψ_3*ψ_4 
-  - θ_0**2*θ_2*ψ_0*ψ_1*ψ_2**2*ψ_3*ψ_4 
-  + θ_0*θ_1*θ_2**2*ψ_0*ψ_1**2*ψ_2*ψ_4 
-  + θ_0*θ_1*θ_2**2*ψ_0*ψ_1*ψ_2**2*ψ_4 
-  + θ_0*θ_1*θ_2**2*ψ_0*ψ_1*ψ_3**2*ψ_4 
-  + θ_0*θ_1*θ_2**2*ψ_0*ψ_2*ψ_3**2*ψ_4 
-  - θ_0*θ_1*θ_2*ψ_0*ψ_1**2*ψ_3*ψ_4 
-  - θ_0*θ_1*θ_2*ψ_0*ψ_2**2*ψ_3*ψ_4 
-  + θ_0*θ_1*ψ_0*ψ_1**2*ψ_2*ψ_3**2*ψ_4 
-  + θ_0*θ_1*ψ_0*ψ_1*ψ_2**2*ψ_3**2*ψ_4 
-  + θ_1**2*θ_2**2*ψ_0**2*ψ_4**2 
-  + θ_1**2*θ_2**2*ψ_0*ψ_1**2*ψ_2**2*ψ_3**2*ψ_4 
-  - θ_1**2*θ_2**2*ψ_0*ψ_1*ψ_2*ψ_3**2*ψ_4 
-  - θ_1**2*θ_2*ψ_0*ψ_1**2*ψ_2*ψ_3*ψ_4 
-  - θ_1**2*θ_2*ψ_0*ψ_1*ψ_2**2*ψ_3*ψ_4 
-
-  [1]
-  - θ_0**2*θ_1**2*θ_2**2*ψ_0**2*ψ_4**2 
-  - θ_0**2*θ_1**2*θ_2**2*ψ_0*ψ_1**2*ψ_2**2*ψ_3**2*ψ_4 
-  + θ_0**2*θ_1**2*θ_2**2*ψ_0*ψ_1*ψ_2*ψ_3**2*ψ_4 
-  + θ_0**2*θ_1**2*θ_2*ψ_0*ψ_1**2*ψ_2*ψ_3*ψ_4 
-  + θ_0**2*θ_1**2*θ_2*ψ_0*ψ_1*ψ_2**2*ψ_3*ψ_4 
-  - θ_0*θ_1*θ_2**2*ψ_0*ψ_1**2*ψ_2*ψ_3**2*ψ_4 
-  - θ_0*θ_1*θ_2**2*ψ_0*ψ_1*ψ_2**2*ψ_3**2*ψ_4 
-  + θ_0*θ_1*θ_2*ψ_0*ψ_1**2*ψ_2**2*ψ_3*ψ_4 
-  - θ_0*θ_1*θ_2*ψ_0*ψ_1*ψ_2*ψ_3*ψ_4
-  '''
-
-  # Fold all `psi` to const, get the partial function form f(tht), not accurate but nearly:
-  #   f(tht) = ΣiΣjΣkΣpΣqΣr tht_i^p * tht_j^q * tht_k^r, when i,j,k,p,q,r ∈ {0,1,2}
-  # now it's clear to see the charateristic function is a 3-variable power-2 polynomial function :)
-  # accordingly, the psi params controlls the coefficient of each term
-
-  # Assume all `theta` to be small enough to eliminate all higher orders, in practice this will lead to network incapable :(
-  #   g(tht) = C1*θ_0*θ_1*θ_2 + C2*θ_0*θ_1 + C3*θ_2 + C4
+  # Even further collapse all multiplier constants to get the functional form ——
+  # => Fold all `psi` to const, get the partial function form of f(tht):
+  #   f(tht) = (θ_0*θ_1 + (θ_0**2-C)*(θ_1**2-C)) * (θ_2 + (θ_2**2-C))
+  # where C are different consts
+  # now it's clear to see the charateristic function is a 3-variable power-6 polynomial function :)
+  # accordingly, the psi params controlls the coefficient of each term in a sophisticated way...
+  # => Fold all `tht` to const, get the partial function form of g(psi):
+  #   g(psi) = ((ψ_0**2-C)+ψ_0)*((ψ_4**2-C)+ψ_4*(((ψ_3**2-C)-ψ_3) * (ψ_1*(ψ_2**2-C) + ψ_2*(ψ_1**2-C))+(ψ_3+(ψ_3**2-C))*(ψ_1*ψ_2-(ψ_1**2-C)*(ψ_2**2-C))))
 
 
 if __name__ == '__main__':
