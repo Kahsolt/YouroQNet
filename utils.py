@@ -42,6 +42,7 @@ TMP_PATH   = Path('tmp') ; TMP_PATH.mkdir(exist_ok=True)
 TASK_FILE  = 'task.json'
 MODEL_FILE = 'model.pth'
 PLOT_FILE  = 'loss_acc.png'
+PLOT_FILE_FMT  = 'loss_acc-%s.png'
 MODEL_FILE_FMT = 'model-%s.pth'
 OPTIM_FILE_FMT = 'model-%s.pth'
 
@@ -227,7 +228,7 @@ def id_to_onehot(label:int, n_class:int=None) -> NDArray:
 
 ''' dataset '''
 
-def load_dataset(split:str, normalize:bool=True, fp:Path=None, seed:int=RAND_SEED) -> Dataset:
+def load_dataset(split:str, normalize:bool=True, fp:Path=None, seed:int=114514) -> Dataset:
   ''' `fp` overrides the default filepath '''
 
   fp_norm = fp or DATA_PATH / f'{split}_cleaned.csv'
@@ -241,7 +242,7 @@ def load_dataset(split:str, normalize:bool=True, fp:Path=None, seed:int=RAND_SEE
   df = pd.read_csv(fp)
   c_lbl, c_txt = df.columns[0], df.columns[-1]
   if split == 'valid':    # the whole valid set is too large
-    df = pd.concat([df_cls.sample(n=1000, random_state=abs(seed)) for _, df_cls in df.groupby(c_lbl)])
+    df = pd.concat([df_cls.sample(n=1000, random_state=seed) for _, df_cls in df.groupby(c_lbl)])
   Y = df[c_lbl].to_numpy().astype(np.int32)
   T = df[c_txt].to_numpy().tolist()
   if normalize: T = [clean_text(t) for t in T]

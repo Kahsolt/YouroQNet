@@ -542,10 +542,12 @@ def train(args, model:QModel, optimizer, criterion, train_loader:Dataloader, tes
         new_f1 = mean(tf1)
         if new_f1 > best_f1:
           best_f1 = new_f1
+          logger.info(f'>> better f1 {new_f1} found, save ckpt')
           save_ckpt(model, out_dp / (MODEL_FILE_FMT % 'best'))
 
       if step % args.ckpt_interval == 0:
         save_ckpt(model, out_dp / (MODEL_FILE_FMT % step))
+        plot_loss_and_acc([losses, accs, test_losses, test_accs], out_dp / (PLOT_FILE_FMT % step), title=args.expname)
 
   return losses, accs, test_losses, test_accs
 
@@ -603,6 +605,7 @@ def go_train(args, user_vocab_data:Tuple[Vocab, Dataset, Dataset]=None, name_suf
 
   # info
   logger.info(f'hparam: {pformat(vars(args))}')
+  json_dump({ 'hparam': vars(args) }, out_dp / TASK_FILE)
 
   # train
   losses_and_accs = train(args, model, optimizer, criterion, train_loader, test_loader, logger)
@@ -639,8 +642,8 @@ def go_train(args, user_vocab_data:Tuple[Vocab, Dataset, Dataset]=None, name_suf
 def go_infer(args, texts:List[str]=None, name_suffix:str='') -> Union[Preds, Inferer]:
   # configs
   out_dp: Path = LOG_PATH / args.analyzer / f'{args.model}{name_suffix}'
-  model_fp = out_dp / MODEL_FILE
-  assert model_fp.exists(), 'you must train this model before you can infer from :('
+  model_fp = out_dp / (MODEL_FILE_FMT % 'best')
+  assert model_fp.exists(), f'you must train this model ({model_fp}) before you can infer from :('
   
   # hparam load
   hparam = json_load(out_dp / TASK_FILE)['hparam']
@@ -648,6 +651,12 @@ def go_infer(args, texts:List[str]=None, name_suffix:str='') -> Union[Preds, Inf
     if not hasattr(args, k):
       setattr(args, k, v)
   
+  # fix seed again
+  random.seed    (args.seed)
+  np.random.seed (args.seed)
+  set_random_seed(args.seed)
+  print(f'>> fix rand_seed to {args.seed} :)')
+
   # ignore training settings
   global export_circuit
   export_circuit = False
@@ -733,7 +742,7 @@ def get_parser():
   parser.add_argument('--n_len',       default=8,         type=int,       help='model input length (in tokens), aka. n_qubit_q')
   parser.add_argument('--n_class',     default=N_CLASS,   type=int,       help='num of class, related to n_qubit_p')
   parser.add_argument('--n_repeat',    default=1,         type=int,       help='circuit n_repeat, effecting embed depth')
-  parser.add_argument('--embed_avg',   default=np.pi/2,   type=float,     help='embedding params normal init mean')
+  parser.add_argument('--embed_avg',   default=0.0,       type=float,     help='embedding params normal init mean')
   parser.add_argument('--embed_var',   default=0.2,       type=float,     help='embedding params normal init variance')
   parser.add_argument('--embed_norm',  default=1,         type=float,     help='embedding out value normalize, fatcor of pi (1 means [-pi, pi]); set 0 to disable')
   parser.add_argument('--SEC_rots',    default='RY,RZ',   help=f'choose multi from {gates_to_names(VALID_SEC_ROTS)}, comma seperate')
@@ -751,7 +760,7 @@ def get_parser():
   parser.add_argument('-G', '--grad_meth',  default='fd',   choices=GRAD_METH.keys(), help='grad method')
   parser.add_argument(      '--grad_dx',    default=0.01,   type=float, help='step size for finite_diff')
   parser.add_argument('--lr',               default=0.01,   type=float)
-  parser.add_argument('-E', '--epochs',     default=10,     type=int)
+  parser.add_argument('-E', '--epochs',     default=4,      type=int)
   parser.add_argument('-B', '--batch_size', default=4,      type=int)
   parser.add_argument('--slog_interval',    default=10,     type=int, help='log loss/acc')
   parser.add_argument('--log_interval',     default=50,     type=int, help='log & test & reset loss/acc')
