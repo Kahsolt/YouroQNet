@@ -361,7 +361,7 @@ class MLP(Module):
 def get_model_and_criterion(args) -> Tuple[QModel, Callable]:
   loss_cls, compute_circuit, n_qubit, n_param = globals()[f'get_{args.model}Net'](args)
   model = QuantumLayer(compute_circuit, n_param, 'cpu', n_qubit, 0, GRAD_METH[args.grad_meth], args.grad_dx)
-  model.m_para.fill_rand_normal_(m=0, s=args.embed_var)
+  model.m_para.fill_rand_normal_(m=args.embed_avg, s=args.embed_var)
   if not 'use uniform inits, they do not work in most cases :(':
     model.m_para.fill_rand_uniform_(v=1)
     model.m_para.fill_rand_signed_uniform_(v=1)
@@ -733,7 +733,8 @@ def get_parser():
   parser.add_argument('--n_len',       default=8,         type=int,       help='model input length (in tokens), aka. n_qubit_q')
   parser.add_argument('--n_class',     default=N_CLASS,   type=int,       help='num of class, related to n_qubit_p')
   parser.add_argument('--n_repeat',    default=1,         type=int,       help='circuit n_repeat, effecting embed depth')
-  parser.add_argument('--embed_var',   default=0.2,       type=float,     help='embedding params init variance (normal)')
+  parser.add_argument('--embed_avg',   default=np.pi/2,   type=float,     help='embedding params normal init mean')
+  parser.add_argument('--embed_var',   default=0.2,       type=float,     help='embedding params normal init variance')
   parser.add_argument('--embed_norm',  default=1,         type=float,     help='embedding out value normalize, fatcor of pi (1 means [-pi, pi]); set 0 to disable')
   parser.add_argument('--SEC_rots',    default='RY,RZ',   help=f'choose multi from {gates_to_names(VALID_SEC_ROTS)}, comma seperate')
   parser.add_argument('--SEC_entgl',   default='CNOT',    help=f'choose one from {gates_to_names(VALID_SEC_ENTGL)}')
