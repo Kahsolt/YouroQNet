@@ -36,9 +36,10 @@ if 'pyvqnet & pyqpanda':
 N_CLASS    = 4
 COULMNS    = ['label', 'text']
 SPLITS     = ['train', 'test', 'valid'] if MODE_DEV else ['train', 'test']
-DATA_PATH  = Path('data') if MODE_DEV else Path('.')
-LOG_PATH   = Path('log') ; LOG_PATH.mkdir(exist_ok=True)
-TMP_PATH   = Path('tmp') ; TMP_PATH.mkdir(exist_ok=True)
+BASE_PATH  = Path(__file__).parent
+DATA_PATH  = BASE_PATH / ('data' if MODE_DEV else '.')
+LOG_PATH   = BASE_PATH / 'log' ; LOG_PATH.mkdir(exist_ok=True)
+TMP_PATH   = BASE_PATH / 'tmp' ; TMP_PATH.mkdir(exist_ok=True)
 TASK_FILE  = 'task.json'
 MODEL_FILE = 'model.pth'
 PLOT_FILE  = 'loss_acc.png'

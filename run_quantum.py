@@ -722,7 +722,7 @@ def get_parser():
 
   parser = ArgumentParser()
   # preprocess
-  parser.add_argument('-L', '--analyzer', default='kgram+', choices=ANALYZERS, help='tokenize level')
+  parser.add_argument('-L', '--analyzer', default='kgram', choices=ANALYZERS, help='tokenize level')
   parser.add_argument('-P', '--pad',      default='\x00',       help='model input pad')
   parser.add_argument('--min_freq',       default=10, type=int, help='min_freq for final embedding vocab')
   parser.add_argument('--limit',          default=-1, type=int, help='limit train data samples')

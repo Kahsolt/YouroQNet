@@ -8,7 +8,8 @@ data/*
 !test.csv
 
 # generated
-log/
+log/*
+!log/kgram/YouroQ/*
 tmp/
 *.7z
 
@@ -21,3 +22,5 @@ ref/*
 !ref/*.cmd
 !ref/Question-ML.png
 !ref/YouroNet.pdf
+!ref/YouroQNet.pptx
+!ref/report.md

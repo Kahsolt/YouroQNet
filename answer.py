@@ -18,7 +18,7 @@ def get_args_best_config():
 
   args = get_args()
   # preprocess
-  args.analyzer   = 'kgram+'
+  args.analyzer   = 'kgram'
   args.min_freq   = 10
   # model
   args.model      = 'YouroQ'
