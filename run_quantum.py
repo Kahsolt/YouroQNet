@@ -545,7 +545,6 @@ def train(args, model:QModel, optimizer, criterion, train_loader:Dataloader, tes
           logger.info(f'>> better f1 {new_f1} found, save ckpt')
           save_ckpt(model, out_dp / (MODEL_FILE_FMT % 'best'))
 
-      if step % args.ckpt_interval == 0:
         save_ckpt(model, out_dp / (MODEL_FILE_FMT % step))
         plot_loss_and_acc([losses, accs, test_losses, test_accs], out_dp / (PLOT_FILE_FMT % step), title=args.expname)
 
@@ -753,7 +752,6 @@ def get_parser():
   parser.add_argument('-B', '--batch_size', default=4,      type=int)
   parser.add_argument('--slog_interval',    default=10,     type=int, help='log loss/acc')
   parser.add_argument('--log_interval',     default=50,     type=int, help='log & test & reset loss/acc')
-  parser.add_argument('--ckpt_interval',    default=200,    type=int, help='save ckpt')
   # infer
   parser.add_argument('--n_vote', default=5, type=int, help='max number of voters at inference time')
   # misc

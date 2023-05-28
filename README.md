@@ -9,7 +9,7 @@ This repo contains code for the final problem of the OriginQ's [2nd CCF "Pilot C
 And, code repo for the qualifying stage is here: [第二届“司南杯”初赛](https://github.com/Kahsolt/CCF-2nd-Pilot-Cup-first-stage)
 
 
-![YouroQNet](img/YouroQNet.png)
+![YouroQNet](img/YouroQNet_arch.png)
 
 
 ### Quickstart

@@ -120,7 +120,6 @@ For the contest problem with given dataset, we train our model using following c
   "batch_size": 4,
   "slog_interval": 10,
   "log_interval": 50,
-  "ckpt_interval": 200,
   "n_vote": 5,
   "seed": 10141,
   "inspect": false,
@@ -148,11 +147,11 @@ Then perform evaluation on inplacely on the contest dataset, here's the results:
 
 | F1-score | train | test | valid |
 | :-: | :-: | :-: | :-: |
-| cls-0 | 0.228  | 0.176  | 0.237  |
-| cls-1 | 0.105  | 0.08   | 0.087  |
-| cls-2 | 0.0    | 0.0    | 0.008  |
-| cls-3 | 0.389  | 0.382  | 0.394  |
-|  avg  | 0.1805 | 0.1595 | 0.1815 |
+| cls-0 | 0.071  | 0.018  | 0.053 |
+| cls-1 | 0.352  | 0.342  | 0.362 |
+| cls-2 | 0.205  | 0.22   | 0.175 |
+| cls-3 | 0.351  | 0.273  | 0.254 |
+|  avg  | 0.2448 | 0.2133 | 0.211 |
 
 ℹ We make the valid set by `valid = total - train - test`
 ⚠ Although the evalution results seems ridiculous, we argue that it's the dataset's fault rather than us YouroQNet 🙄
