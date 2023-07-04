@@ -6,6 +6,10 @@
 
 This repo contains code for the final problem of the OriginQ's [2nd CCF "Pilot Cup" contest](https://contest.originqc.com.cn/contest/4/contest:introduction) (Professional Group - Quantum Machine Learning Track).
 
+> Oh yes yes child, we've run a hard time struggling.
+
+The final total score is **79.2**, and ranking unknown; but why the fuck you owe me a point of 0.8?? 🐱
+
 And, code repo for the qualifying stage is here: [第二届“司南杯”初赛](https://github.com/Kahsolt/CCF-2nd-Pilot-Cup-first-stage)
 
 
